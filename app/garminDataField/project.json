@@ -1,0 +1,29 @@
+{
+  "name": "garminDataField",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "app/garminDataField/source",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "GARMIN_DEVELOPER_KEY=${GARMIN_DEVELOPER_KEY:-$HOME/garmin-dev/developer_key.der} DEVICE=${DEVICE:-fr970} ./app/garminDataField/scripts/build.sh",
+        "cwd": "."
+      },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build/outputs"]
+    },
+    "export": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "GARMIN_DEVELOPER_KEY=${GARMIN_DEVELOPER_KEY:-$HOME/garmin-dev/developer_key.der} DEVICE=${DEVICE:-fr970} ./app/garminDataField/scripts/export-iq.sh",
+        "cwd": "."
+      },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build/outputs"]
+    }
+  },
+  "tags": ["type:app", "platform:garmin"]
+}

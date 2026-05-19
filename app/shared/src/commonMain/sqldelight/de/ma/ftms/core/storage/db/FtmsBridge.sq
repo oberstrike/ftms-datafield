@@ -1,0 +1,167 @@
+CREATE TABLE workout_session (
+    session_id TEXT NOT NULL PRIMARY KEY,
+    started_at_millis INTEGER NOT NULL,
+    stopped_at_millis INTEGER,
+    final_status TEXT NOT NULL,
+    treadmill_name TEXT,
+    treadmill_address TEXT,
+    garmin_name TEXT,
+    garmin_id INTEGER,
+    packet_count INTEGER NOT NULL DEFAULT 0,
+    send_success_count INTEGER NOT NULL DEFAULT 0,
+    send_failure_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    final_distance_m REAL NOT NULL DEFAULT 0.0,
+    final_ascent_m REAL NOT NULL DEFAULT 0.0,
+    final_speed_kmh REAL NOT NULL DEFAULT 0.0,
+    updated_at_millis INTEGER NOT NULL
+);
+
+CREATE INDEX idx_workout_session_started ON workout_session(started_at_millis DESC);
+CREATE INDEX idx_workout_session_status ON workout_session(final_status);
+
+CREATE TABLE session_sample (
+    sample_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    timestamp_millis INTEGER NOT NULL,
+    offset_millis INTEGER NOT NULL,
+    kind INTEGER NOT NULL,
+    raw_flags INTEGER NOT NULL,
+    raw_hex TEXT NOT NULL DEFAULT '',
+    speed_kmh REAL,
+    raw_distance_m INTEGER,
+    smoothed_distance_m REAL NOT NULL,
+    ascent_m REAL NOT NULL,
+    incline_pct REAL,
+    power_w INTEGER,
+    heart_rate_bpm INTEGER,
+    cadence_rpm REAL,
+    step_rate_spm REAL,
+    resistance REAL,
+    elapsed_s INTEGER,
+    remaining_s INTEGER,
+    parse_error TEXT,
+    distance_source TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES workout_session(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_session_sample_session_offset ON session_sample(session_id, offset_millis);
+
+selectRecentSessions:
+SELECT *
+FROM workout_session
+ORDER BY started_at_millis DESC;
+
+selectLatestSession:
+SELECT *
+FROM workout_session
+WHERE final_status != 'running'
+ORDER BY started_at_millis DESC
+LIMIT 1;
+
+selectSessionById:
+SELECT *
+FROM workout_session
+WHERE session_id = ?;
+
+selectSamplesForSession:
+SELECT *
+FROM session_sample
+WHERE session_id = ?
+ORDER BY offset_millis ASC;
+
+selectOpenSessions:
+SELECT *
+FROM workout_session
+WHERE stopped_at_millis IS NULL;
+
+insertSession:
+INSERT INTO workout_session(
+    session_id,
+    started_at_millis,
+    stopped_at_millis,
+    final_status,
+    treadmill_name,
+    treadmill_address,
+    garmin_name,
+    garmin_id,
+    packet_count,
+    send_success_count,
+    send_failure_count,
+    last_error,
+    final_distance_m,
+    final_ascent_m,
+    final_speed_kmh,
+    updated_at_millis
+) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, 0, 0, '', 0.0, 0.0, 0.0, ?);
+
+insertSample:
+INSERT INTO session_sample(
+    session_id,
+    timestamp_millis,
+    offset_millis,
+    kind,
+    raw_flags,
+    raw_hex,
+    speed_kmh,
+    raw_distance_m,
+    smoothed_distance_m,
+    ascent_m,
+    incline_pct,
+    power_w,
+    heart_rate_bpm,
+    cadence_rpm,
+    step_rate_spm,
+    resistance,
+    elapsed_s,
+    remaining_s,
+    parse_error,
+    distance_source
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateSessionStats:
+UPDATE workout_session
+SET packet_count = ?,
+    send_success_count = ?,
+    send_failure_count = ?,
+    last_error = ?,
+    final_distance_m = ?,
+    final_ascent_m = ?,
+    final_speed_kmh = ?,
+    updated_at_millis = ?
+WHERE session_id = ?;
+
+finishSession:
+UPDATE workout_session
+SET stopped_at_millis = ?,
+    final_status = ?,
+    packet_count = ?,
+    send_success_count = ?,
+    send_failure_count = ?,
+    last_error = ?,
+    final_distance_m = ?,
+    final_ascent_m = ?,
+    final_speed_kmh = ?,
+    updated_at_millis = ?
+WHERE session_id = ?;
+
+markOpenSessionsInterrupted:
+UPDATE workout_session
+SET stopped_at_millis = ?,
+    final_status = 'interrupted',
+    updated_at_millis = ?
+WHERE stopped_at_millis IS NULL;
+
+deleteSession:
+DELETE FROM session_sample
+WHERE session_id = ?;
+
+deleteSessionRow:
+DELETE FROM workout_session
+WHERE session_id = ?;
+
+clearSamples:
+DELETE FROM session_sample;
+
+clearSessions:
+DELETE FROM workout_session;

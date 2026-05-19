@@ -1,0 +1,17 @@
+* text=auto
+
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.mc text eol=lf
+*.kts text eol=lf
+*.kt text eol=lf
+*.sq text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+
+*.jar binary
+*.png binary

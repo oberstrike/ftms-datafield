@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">FTMS Bridge</string>
+    <string name="bridge_notification_channel">FTMS bridge</string>
+    <string name="bridge_notification_title">FTMS Bridge running</string>
+    <string name="bridge_notification_text">Forwarding treadmill data to Garmin</string>
+</resources>

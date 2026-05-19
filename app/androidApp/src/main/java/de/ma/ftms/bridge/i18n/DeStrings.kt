@@ -1,0 +1,179 @@
+package de.ma.ftms.bridge.i18n
+
+object DeStrings : Strings {
+    override val common: CommonStrings = DeCommonStrings
+    override val nav: NavigationStrings = DeNavigationStrings
+    override val dashboard: DashboardStrings = DeDashboardStrings
+    override val devices: DevicesStrings = DeDevicesStrings
+    override val history: HistoryStrings = DeHistoryStrings
+    override val logs: LogsStrings = DeLogsStrings
+    override val settings: SettingsStrings = DeSettingsStrings
+    override val notification: NotificationStrings = DeNotificationStrings
+}
+
+private object DeCommonStrings : CommonStrings {
+    override val missingValue = "--"
+    override val cancel = "Abbrechen"
+    override val clear = "Löschen"
+    override val delete = "Löschen"
+    override val back = "Zurück"
+    override val start = "Start"
+    override val stop = "Stopp"
+    override val share = "Teilen"
+    override val status = "Status"
+    override val packets = "Pakete"
+    override val sends = "Sendungen"
+    override val lastError = "Letzter Fehler"
+    override val distance = "Distanz"
+    override val ascent = "Anstieg"
+    override val duration = "Dauer"
+    override val treadmill = "Laufband"
+    override val garmin = "Garmin"
+    override val unknown = "Unbekannt"
+    override val machine = "Gerät"
+    override val resistance = "Widerstand"
+    override val speed = "Geschwindigkeit"
+    override val incline = "Steigung"
+    override val power = "Leistung"
+    override val heartRate = "HF"
+    override val cadenceStep = "Kadenz / Schritt"
+    override val elapsed = "Verstrichen"
+    override fun sendSummary(successCount: Int, failureCount: Int) = "$successCount ok / $failureCount fehlgeschlagen"
+    override fun minValue(value: Double) = "Min %.1f".format(value)
+    override fun maxValue(value: Double) = "Max %.1f".format(value)
+}
+
+private object DeNavigationStrings : NavigationStrings {
+    override val dashboard = "Dashboard"
+    override val history = "Verlauf"
+    override val devices = "Geräte"
+    override val logs = "Logs"
+    override val settings = "Einstellungen"
+}
+
+private object DeDashboardStrings : DashboardStrings {
+    override val title = "FTMS Bridge"
+    override val bridgeRunning = "Bridge läuft"
+    override val bridgeIdle = "Bridge bereit"
+    override val noFtmsEquipmentSelected = "Kein FTMS-Gerät ausgewählt"
+    override val noGarminWatchSelected = "Keine Garmin-Uhr ausgewählt"
+    override val grantBluetoothPermissions = "Bluetooth-Berechtigungen erteilen"
+    override val sectionStatus = "Status"
+    override val sectionLiveMetrics = "Live-Werte"
+    override val sectionLastSession = "Letzte Session"
+    override val noPreviousSession = "Noch keine Bridge-Session"
+    override val bluetoothReady = "Bluetooth bereit"
+    override val bluetoothOff = "Bluetooth aus"
+    override val ftmsConnected = "FTMS verbunden"
+    override val ftmsDisconnected = "FTMS getrennt"
+    override val garminReady = "Garmin bereit"
+    override val garminPending = "Garmin offen"
+    override val send = "Senden"
+    override val startBlockBridgeRunning = "Bridge läuft bereits"
+    override val startBlockBluetoothPermissions = "Bluetooth-Berechtigungen sind erforderlich"
+    override val startBlockBluetoothUnavailable = "Bluetooth ist nicht verfügbar oder deaktiviert"
+    override val startBlockSelectFtms = "FTMS-Gerät auswählen"
+    override val startBlockSelectGarmin = "Garmin-Uhr auswählen"
+    override val startBlockGarminApp = "Garmin-Geräte aktualisieren und eine Uhr mit installiertem Datenfeld auswählen"
+    override val machineBike = "Bike"
+    override val machineTreadmill = "Laufband"
+    override val machineCrossTrainer = "Crosstrainer"
+}
+
+private object DeDevicesStrings : DevicesStrings {
+    override val title = "Geräte"
+    override val ftmsEquipment = "FTMS-Gerät"
+    override val bluetoothScanner = "Bluetooth-Scanner"
+    override val noEquipmentSelected = "Kein Gerät ausgewählt"
+    override val scan = "Scannen"
+    override val noFtmsEquipmentFound = "Noch kein FTMS-Gerät gefunden"
+    override val garminWatch = "Garmin-Uhr"
+    override val connectIq = "Connect IQ"
+    override val noWatchSelected = "Keine Uhr ausgewählt"
+    override val refresh = "Aktualisieren"
+    override val noGarminDeviceLoaded = "Noch kein Garmin-Gerät geladen"
+    override val badgeName = "Name"
+    override val badgeApp = "App"
+    override val badgeNoApp = "Keine App"
+    override val badgeCheck = "Prüfen"
+    override val bluetoothUnavailable = "Bluetooth ist nicht verfügbar"
+    override val garminDiagnostics = "Garmin-Diagnose"
+    override val garminSdkStatus = "SDK-Status"
+    override val garminKnownDevices = "Bekannte Geräte"
+    override val garminLastMessage = "Letzte Meldung"
+}
+
+private object DeHistoryStrings : HistoryStrings {
+    override val title = "Verlauf"
+    override val storedSessions = "Gespeicherte Sessions"
+    override val noSessionsStored = "Noch keine Sessions gespeichert"
+    override val clearHistoryTitle = "Verlauf löschen?"
+    override val clearHistoryText = "Damit werden alle lokal gespeicherten Bridge-Sessions von diesem Telefon entfernt."
+    override val deleteSessionTitle = "Session löschen?"
+    override val deleteSessionText = "Damit wird diese lokal gespeicherte Bridge-Session von diesem Telefon entfernt."
+    override val noGraphSamplesStored = "Keine Diagrammdaten gespeichert"
+    override val notEnoughSamples = "Nicht genügend Datenpunkte"
+    override val chartSpeed = "Geschwindigkeit"
+    override val chartIncline = "Steigung"
+    override val chartAscent = "Anstieg"
+    override val chartPower = "Leistung"
+    override val chartHeartRate = "Herzfrequenz"
+    override val chartCadenceStep = "Kadenz / Schritt"
+    override val chartResistance = "Widerstand"
+    override fun savedSessions(count: Int) = "$count gespeichert"
+}
+
+private object DeLogsStrings : LogsStrings {
+    override val title = "Logs"
+    override val debugLog = "Debug-Log"
+    override val diagnosticLog = "Run-Diagnose"
+    override val diagnosticLogPath = "Gespeicherte Datei"
+    override val noDiagnosticLogFile = "Noch kein gespeichertes Run-Log"
+    override val androidLogcatLog = "Android-Logcat"
+    override val noDebugLogEntries = "Keine Debug-Logeinträge"
+    override val live = "Live"
+    override val stopped = "Gestoppt"
+    override val searchLogs = "Logs suchen"
+    override val levelDebug = "Debug"
+    override val levelInfo = "Info"
+    override val levelWarn = "Warnung"
+    override val levelError = "Fehler"
+    override fun entryCount(filteredCount: Int, totalCount: Int, capturing: Boolean): String =
+        if (capturing) "$filteredCount von $totalCount Einträgen, Erfassung läuft" else "$filteredCount von $totalCount Einträgen"
+}
+
+private object DeSettingsStrings : SettingsStrings {
+    override val title = "Einstellungen"
+    override val bridgeBehavior = "Bridge-Verhalten"
+    override val sendToAllGarminVariants = "An alle Garmin-Varianten senden"
+    override val sendToAllGarminVariantsSubtitle = "Aktualisiert jedes installierte FTMS-Datenfeld im selben Training."
+    override val autoReconnect = "Automatisch neu verbinden"
+    override val autoReconnectSubtitle = "FTMS-Geräteverbindung nach Abbrüchen und Paket-Timeouts erneut versuchen."
+    override val timing = "Timing"
+    override val packetTimeout = "Paket-Timeout"
+    override val sendInterval = "Sendeintervall"
+    override val maxLogEntries = "Max. Logeinträge"
+    override val debug = "Debug"
+    override val debugLogging = "Debug-Logging"
+    override val debugLoggingEnabledSubtitle = "App- und Android-Logcat-Ausgaben zur Fehlersuche erfassen."
+    override val debugLoggingDisabledSubtitle = "Detaillierte lokale Logs aktivieren, bevor Laufband- oder Garmin-Probleme reproduziert werden."
+    override val rememberedDevices = "Gemerkte Geräte"
+    override val ftmsEquipment = "FTMS-Gerät"
+    override val garminWatch = "Garmin-Uhr"
+    override val clearRememberedSelections = "Gemerkte Auswahl löschen"
+    override val clearRememberedSelectionsSubtitle = "Ausgewähltes Laufband und Garmin-Uhr auf diesem Telefon vergessen."
+    override val clearRememberedDevicesTitle = "Gemerkte Geräte löschen?"
+    override val clearRememberedDevicesText = "Die Bridge vergisst das ausgewählte FTMS-Gerät und die Garmin-Uhr."
+    override val language = "Sprache"
+    override val languageSystemDefault = "Systemstandard"
+}
+
+private object DeNotificationStrings : NotificationStrings {
+    override val channel = "FTMS-Bridge"
+    override val title = "FTMS Bridge läuft"
+    override val text = "Laufbanddaten werden an Garmin weitergeleitet"
+    override val stopAction = "Stopp"
+    override val shareDebugLogSubject = "FTMS Bridge Debug-Log"
+    override val shareDebugLogChooser = "Debug-Log teilen"
+    override val noDebugLogFile = "Keine Debug-Logdatei zum Teilen verfügbar"
+}

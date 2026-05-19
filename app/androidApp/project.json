@@ -1,0 +1,29 @@
+{
+  "name": "androidApp",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "app/androidApp/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:androidApp:assembleDebug", "cwd": "." },
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build"]
+    },
+    "install": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:androidApp:installDebug", "cwd": "." },
+      "dependsOn": ["build"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:androidApp:testDebugUnitTest", "cwd": "." },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build/test-results", "{projectRoot}/build/reports/tests"]
+    }
+  },
+  "tags": ["type:app", "platform:android"]
+}

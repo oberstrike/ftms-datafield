@@ -1,0 +1,35 @@
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application
+        id="8eb0b6152ef04aa7a1687c67ce46bfdf"
+        type="datafield"
+        name="@Strings.AppName"
+        entry="FtmsDataFieldApp"
+        launcherIcon="@Drawables.LauncherIcon"
+        minApiLevel="5.0.0"
+        version="0.1.0">
+
+        <iq:products>
+            <!-- New/current Forerunner line. Build target: fr970 for Forerunner 970. -->
+            <iq:product id="fr970"/>
+            <iq:product id="fr57047mm"/>
+            <iq:product id="fr57042mm"/>
+            <iq:product id="fr170"/>
+            <iq:product id="fr170m"/>
+            <iq:product id="fr70"/>
+
+            <!-- Useful older test targets. Remove if you want the first release to be FR970-only. -->
+            <iq:product id="fr965"/>
+            <iq:product id="fr955"/>
+        </iq:products>
+
+        <iq:permissions>
+            <iq:uses-permission id="BluetoothLowEnergy"/>
+            <iq:uses-permission id="Communications"/>
+            <iq:uses-permission id="FitContributor"/>
+        </iq:permissions>
+
+        <iq:languages>
+            <iq:language>deu</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

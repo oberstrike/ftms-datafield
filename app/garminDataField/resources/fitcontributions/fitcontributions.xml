@@ -1,0 +1,115 @@
+<fitContributions>
+    <fitField id="0"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="0"
+              precision="1"
+              chartTitle="@Strings.HmChartTitle"
+              dataLabel="@Strings.HmLabel"
+              unitLabel="@Strings.HmUnit"
+              fillColor="#ff6600" />
+
+    <fitField id="1"
+              displayInChart="false"
+              displayInActivitySummary="true"
+              sortOrder="1"
+              precision="1"
+              dataLabel="@Strings.HmSummaryLabel"
+              unitLabel="@Strings.HmUnit" />
+
+    <fitField id="2"
+              displayInChart="false"
+              displayInActivitySummary="true"
+              sortOrder="2"
+              precision="0"
+              dataLabel="@Strings.HmSourceLabel"
+              unitLabel="@Strings.HmSourceUnit" />
+
+    <fitField id="3"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="3"
+              precision="0"
+              chartTitle="@Strings.PowerChartTitle"
+              dataLabel="@Strings.PowerLabel"
+              unitLabel="@Strings.PowerUnit"
+              fillColor="#ff0000" />
+
+    <fitField id="4"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="4"
+              precision="1"
+              chartTitle="@Strings.SpeedChartTitle"
+              dataLabel="@Strings.SpeedLabel"
+              unitLabel="@Strings.SpeedUnit"
+              fillColor="#0066ff" />
+
+    <fitField id="5"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="5"
+              precision="1"
+              chartTitle="@Strings.DistanceChartTitle"
+              dataLabel="@Strings.DistanceLabel"
+              unitLabel="@Strings.DistanceUnit"
+              fillColor="#00aa00" />
+
+    <fitField id="6"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="6"
+              precision="1"
+              chartTitle="@Strings.CadStepChartTitle"
+              dataLabel="@Strings.CadStepLabel"
+              unitLabel="@Strings.CadStepUnit"
+              fillColor="#00aaaa" />
+
+    <fitField id="7"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="7"
+              precision="1"
+              chartTitle="@Strings.InclineChartTitle"
+              dataLabel="@Strings.InclineLabel"
+              unitLabel="@Strings.InclineUnit"
+              fillColor="#aa00aa" />
+
+    <fitField id="8"
+              displayInChart="false"
+              displayInActivitySummary="true"
+              sortOrder="8"
+              precision="0"
+              dataLabel="@Strings.MachineLabel"
+              unitLabel="@Strings.MachineUnit" />
+
+    <fitField id="9"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="9"
+              precision="0"
+              chartTitle="@Strings.HeartRateChartTitle"
+              dataLabel="@Strings.HeartRateLabel"
+              unitLabel="@Strings.HeartRateUnit"
+              fillColor="#cc0000" />
+
+    <fitField id="10"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="10"
+              precision="0"
+              chartTitle="@Strings.ElapsedChartTitle"
+              dataLabel="@Strings.ElapsedLabel"
+              unitLabel="@Strings.ElapsedUnit"
+              fillColor="#777777" />
+
+    <fitField id="11"
+              displayInChart="true"
+              displayInActivitySummary="false"
+              sortOrder="11"
+              precision="1"
+              chartTitle="@Strings.ResistanceChartTitle"
+              dataLabel="@Strings.ResistanceLabel"
+              unitLabel="@Strings.ResistanceUnit"
+              fillColor="#885500" />
+</fitContributions>

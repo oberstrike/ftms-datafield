@@ -1,0 +1,46 @@
+[versions]
+kotlin = "2.3.21"
+androidGradlePlugin = "9.2.1"
+androidCompileSdk = "36"
+androidMinSdk = "24"
+androidTargetSdk = "36"
+androidxActivityCompose = "1.13.0"
+androidxCore = "1.17.0"
+androidxLifecycle = "2.10.0"
+compose = "1.11.1"
+composeMaterial3 = "1.4.0"
+garminConnectIq = "2.4.0"
+kotlinxCoroutines = "1.11.0"
+decompose = "3.5.0"
+sqldelight = "2.3.2"
+vico = "3.0.3"
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlinPluginCompose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "androidGradlePlugin" }
+androidLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "androidGradlePlugin" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+
+[libraries]
+androidxActivityCompose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
+androidxCoreKtx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidxLifecycleRuntimeCompose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
+androidxLifecycleViewmodelCompose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+composeFoundation = { module = "androidx.compose.foundation:foundation", version.ref = "compose" }
+composeMaterial3 = { module = "androidx.compose.material3:material3", version.ref = "composeMaterial3" }
+composeUi = { module = "androidx.compose.ui:ui", version.ref = "compose" }
+composeUiTooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose" }
+composeUiToolingPreview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "compose" }
+garminConnectIq = { module = "com.garmin.connectiq:ciq-companion-app-sdk", version.ref = "garminConnectIq" }
+kotlinxCoroutinesCore = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinxCoroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinxCoroutinesAndroid = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+decompose = { module = "com.arkivanov.decompose:decompose", version.ref = "decompose" }
+decomposeExtensionsCompose = { module = "com.arkivanov.decompose:extensions-compose", version.ref = "decompose" }
+sqldelightAndroidDriver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelightCoroutinesExtensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+sqldelightSqliteDriver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+vicoCompose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
+vicoComposeM3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }

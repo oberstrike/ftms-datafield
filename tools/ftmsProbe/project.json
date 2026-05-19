@@ -1,0 +1,23 @@
+{
+  "name": "ftmsProbe",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "tools/ftmsProbe",
+  "targets": {
+    "scan": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": ". .venv-ftms-probe/bin/activate && python tools/ftmsProbe/ftms_probe.py --target-prefix FS-BC11B --scan-seconds 10 --no-connect",
+        "cwd": "."
+      }
+    },
+    "report": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": ". .venv-ftms-probe/bin/activate && python tools/ftmsProbe/ftms_probe.py --target-prefix FS-BC11B --notify-seconds 30 --jsonl artifacts/captures/fs-bc11b7-report-$(date +%Y%m%d-%H%M%S).jsonl",
+        "cwd": "."
+      }
+    }
+  },
+  "tags": ["type:tool", "platform:linux"]
+}

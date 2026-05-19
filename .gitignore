@@ -1,0 +1,45 @@
+# Build and generated output
+bin/
+gen/
+build/
+**/build/
+.gradle/
+.kotlin/
+.nx/
+node_modules/
+__pycache__/
+.venv-ftms-probe/
+
+# IDE and local workspace files
+.idea/
+*.iml
+.vscode/
+.run/
+
+# Local/private configuration
+local.properties
+.env*
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+
+# Generated packages and diagnostics
+*.apk
+*.aab
+*.prg
+*.iq
+*.debug.xml
+*.log
+*.db
+*.sqlite
+*.bak
+*.zip
+/img.png
+
+# Captures/log folders keep only placeholders
+artifacts/captures/*
+!artifacts/captures/.gitignore
+artifacts/logs/*
+!artifacts/logs/.gitignore

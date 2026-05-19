@@ -1,0 +1,23 @@
+{
+  "name": "shared",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "app/shared/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:shared:build", "cwd": "." },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:shared:jvmTest", "cwd": "." },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build/test-results", "{projectRoot}/build/reports/tests"]
+    }
+  },
+  "tags": ["type:lib", "platform:kmp"]
+}

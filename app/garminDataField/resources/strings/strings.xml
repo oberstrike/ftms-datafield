@@ -1,0 +1,45 @@
+<strings>
+    <string id="AppName">FTMS Höhenmeter</string>
+
+    <string id="HmChartTitle">Höhenmeter</string>
+    <string id="HmLabel">Höhenmeter gelaufen</string>
+    <string id="HmSummaryLabel">Höhenmeter gesamt</string>
+    <string id="HmUnit">m</string>
+    <string id="HmSourceLabel">HM Quelle</string>
+    <string id="HmSourceUnit">0/1/2</string>
+
+    <string id="PowerChartTitle">FTMS Power</string>
+    <string id="PowerLabel">FTMS Power</string>
+    <string id="PowerUnit">W</string>
+
+    <string id="SpeedChartTitle">FTMS Geschwindigkeit</string>
+    <string id="SpeedLabel">FTMS Geschwindigkeit</string>
+    <string id="SpeedUnit">km/h</string>
+
+    <string id="DistanceChartTitle">FTMS Distanz</string>
+    <string id="DistanceLabel">FTMS Distanz</string>
+    <string id="DistanceUnit">m</string>
+
+    <string id="CadStepChartTitle">FTMS Kadenz / Step Rate</string>
+    <string id="CadStepLabel">FTMS Kadenz/Step</string>
+    <string id="CadStepUnit">rpm/spm</string>
+
+    <string id="InclineChartTitle">FTMS Steigung</string>
+    <string id="InclineLabel">FTMS Steigung</string>
+    <string id="InclineUnit">%</string>
+
+    <string id="MachineLabel">FTMS Gerätetyp</string>
+    <string id="MachineUnit">1/2/3</string>
+
+    <string id="HeartRateChartTitle">FTMS Heart Rate</string>
+    <string id="HeartRateLabel">FTMS Heart Rate</string>
+    <string id="HeartRateUnit">bpm</string>
+
+    <string id="ElapsedChartTitle">FTMS Elapsed Time</string>
+    <string id="ElapsedLabel">FTMS Elapsed Time</string>
+    <string id="ElapsedUnit">s</string>
+
+    <string id="ResistanceChartTitle">FTMS Resistance</string>
+    <string id="ResistanceLabel">FTMS Resistance</string>
+    <string id="ResistanceUnit">level</string>
+</strings>

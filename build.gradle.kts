@@ -1,0 +1,15 @@
+plugins {
+    alias(libs.plugins.kotlinMultiplatform) apply false
+    alias(libs.plugins.kotlinAndroid) apply false
+    alias(libs.plugins.kotlinPluginCompose) apply false
+    alias(libs.plugins.androidApplication) apply false
+    alias(libs.plugins.androidLibrary) apply false
+    alias(libs.plugins.sqldelight) apply false
+}
+
+tasks.register("cleanAll") {
+    description = "Delete root build directory"
+    doLast {
+        delete(rootProject.layout.buildDirectory)
+    }
+}
