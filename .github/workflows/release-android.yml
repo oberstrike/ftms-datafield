@@ -1,0 +1,55 @@
+name: Release Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-android:
+    name: Build and publish Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Verify and build
+        run: |
+          ./gradlew \
+            :app:shared:jvmTest \
+            :app:androidApp:testDebugUnitTest \
+            :app:androidApp:lintDebug \
+            :app:androidApp:assembleDebug
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          APK_NAME="ftms-bridge-android-${GITHUB_REF_NAME}-debug.apk"
+          cp app/androidApp/build/outputs/apk/debug/androidApp-debug.apk "release/${APK_NAME}"
+          (cd release && sha256sum "${APK_NAME}" > SHA256SUMS.txt)
+          awk '/^## v1\.0\.0/{flag=1; next} /^## /{flag=0} flag' CHANGELOG.md > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            echo "FTMS Datafield Android bridge ${GITHUB_REF_NAME}" > release-notes.md
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release/ftms-bridge-android-${GITHUB_REF_NAME}-debug.apk \
+            release/SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md

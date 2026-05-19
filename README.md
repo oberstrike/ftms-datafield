@@ -10,6 +10,17 @@ Unterstützte FTMS-Quellen in dieser Vorlage:
 
 Primärer Anzeige-Wert auf der Uhr: **Höhenmeter gelaufen**.
 
+## Download v1.0.0
+
+Version 1.0.0 stellt die Android-Bridge als debug-signierte APK bereit:
+
+- [ftms-bridge-android-v1.0.0-debug.apk](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.0.0)
+- [SHA256SUMS.txt](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.0.0)
+
+Die APK ist für Sideloading gedacht. Android muss die Installation aus unbekannten Quellen für den verwendeten Browser oder Dateimanager erlauben.
+
+Wichtig: Dieses Release enthält nur die Android-App. Garmin-/Connect-IQ-Artefakte werden in v1.0.0 noch nicht als Download veröffentlicht; das Datenfeld kann weiterhin aus dem Quellcode gebaut und sideloaded werden.
+
 Zusätzlich werden als FIT Developer Fields geschrieben:
 
 - `hm_gelaufen`
