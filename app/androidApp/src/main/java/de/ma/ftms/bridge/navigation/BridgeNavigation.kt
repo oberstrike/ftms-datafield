@@ -81,6 +81,7 @@ interface SettingsComponent {
         data object Language : Child()
         data object Debug : Child()
         data object RememberedDevices : Child()
+        data object OpenSource : Child()
     }
 }
 
@@ -186,6 +187,7 @@ private class DefaultSettingsComponent(
             SettingsConfig.Language -> SettingsComponent.Child.Language
             SettingsConfig.Debug -> SettingsComponent.Child.Debug
             SettingsConfig.RememberedDevices -> SettingsComponent.Child.RememberedDevices
+            SettingsConfig.OpenSource -> SettingsComponent.Child.OpenSource
         }
 }
 
@@ -198,6 +200,7 @@ sealed class SettingsConfig {
     data object Language : SettingsConfig()
     data object Debug : SettingsConfig()
     data object RememberedDevices : SettingsConfig()
+    data object OpenSource : SettingsConfig()
 }
 
 sealed class NavigationConfig {

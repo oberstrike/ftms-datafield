@@ -212,6 +212,16 @@ private object EnSettingsStrings : SettingsStrings {
     override val language = "Language"
     override val languageSubtitle = "Choose the app display language."
     override val languageSystemDefault = "System default"
+    override val appVersion = "App version"
+    override val openSource = "Open source"
+    override val openSourceSubtitle = "Direct open-source libraries and third-party SDK notices."
+    override val openSourceLibraries = "Open-source libraries"
+    override val thirdPartySdk = "Third-party SDK"
+    override val libraryVersion = "Version"
+    override val license = "License"
+    override val projectWebsite = "Project"
+    override val garminSdkNote = "Garmin companion SDK dependency used for watch communication. It is shown separately from the open-source library list."
+    override fun appVersionValue(version: String) = "Version $version"
     override fun chartTimespanMinutes(minutes: Int) = "${minutes}m"
 }
 

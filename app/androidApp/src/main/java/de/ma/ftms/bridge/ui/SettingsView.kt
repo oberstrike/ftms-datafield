@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import de.ma.ftms.bridge.BuildConfig
+import de.ma.ftms.bridge.about.OpenSourceLibrary
+import de.ma.ftms.bridge.about.ThirdPartySdk
+import de.ma.ftms.bridge.about.appVersionLabel
+import de.ma.ftms.bridge.about.openSourceLibraries
+import de.ma.ftms.bridge.about.thirdPartySdks
 import de.ma.ftms.bridge.i18n.AppLanguage
 import de.ma.ftms.bridge.i18n.LocalStrings
 import de.ma.ftms.bridge.i18n.displayLabel
@@ -51,6 +58,7 @@ fun SettingsView(component: SettingsComponent) {
             SettingsComponent.Child.Language -> LanguageSettingsView(component)
             SettingsComponent.Child.Debug -> DebugSettingsView(component)
             SettingsComponent.Child.RememberedDevices -> RememberedDevicesSettingsView(component)
+            SettingsComponent.Child.OpenSource -> OpenSourceSettingsView(component)
         }
     }
 }
@@ -112,6 +120,27 @@ private fun SettingsOverviewView(component: SettingsComponent) {
                     subtitle = strings.settings.rememberedDevicesSubtitle,
                     onClick = { component.navigateTo(SettingsConfig.RememberedDevices) },
                 )
+            }
+            item {
+                SettingsDestinationCard(
+                    title = strings.settings.openSource,
+                    subtitle = strings.settings.openSourceSubtitle,
+                    onClick = { component.navigateTo(SettingsConfig.OpenSource) },
+                )
+            }
+            item {
+                InfoCard {
+                    Text(
+                        strings.settings.appVersion,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        strings.settings.appVersionValue(appVersionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             item { VerticalGap() }
         }
@@ -415,6 +444,60 @@ private fun RememberedDevicesSettingsView(component: SettingsComponent) {
                 component.onClearRememberedSelections()
             },
             onDismiss = { showClearSelectionsConfirm = false },
+        )
+    }
+}
+
+@Composable
+private fun OpenSourceSettingsView(component: SettingsComponent) {
+    val strings = LocalStrings.current
+
+    SettingsPageScaffold(title = strings.settings.openSource, component = component) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.settings.openSourceLibraries) {
+                openSourceLibraries.forEachIndexed { index, library ->
+                    OpenSourceLibraryNotice(library)
+                    if (index < openSourceLibraries.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+            Section(strings.settings.thirdPartySdk) {
+                thirdPartySdks.forEachIndexed { index, sdk ->
+                    ThirdPartySdkNotice(sdk)
+                    if (index < thirdPartySdks.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenSourceLibraryNotice(library: OpenSourceLibrary) {
+    val strings = LocalStrings.current
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(library.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        StatusRow(strings.settings.libraryVersion, library.version)
+        StatusRow(strings.settings.license, library.license)
+        StatusRow(strings.settings.projectWebsite, library.url)
+    }
+}
+
+@Composable
+private fun ThirdPartySdkNotice(sdk: ThirdPartySdk) {
+    val strings = LocalStrings.current
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(sdk.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        StatusRow(strings.settings.libraryVersion, sdk.version)
+        StatusRow(strings.settings.projectWebsite, sdk.url)
+        Text(
+            strings.settings.garminSdkNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

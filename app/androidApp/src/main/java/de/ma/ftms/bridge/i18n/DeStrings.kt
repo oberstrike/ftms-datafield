@@ -212,6 +212,16 @@ private object DeSettingsStrings : SettingsStrings {
     override val language = "Sprache"
     override val languageSubtitle = "Anzeigesprache der App wählen."
     override val languageSystemDefault = "Systemstandard"
+    override val appVersion = "App-Version"
+    override val openSource = "Open Source"
+    override val openSourceSubtitle = "Direkt verwendete Open-Source-Bibliotheken und Hinweise zu Drittanbieter-SDKs."
+    override val openSourceLibraries = "Open-Source-Bibliotheken"
+    override val thirdPartySdk = "Drittanbieter-SDK"
+    override val libraryVersion = "Version"
+    override val license = "Lizenz"
+    override val projectWebsite = "Projekt"
+    override val garminSdkNote = "Garmin Companion-SDK-Abhängigkeit für die Kommunikation mit der Uhr. Sie wird getrennt von der Open-Source-Bibliotheksliste angezeigt."
+    override fun appVersionValue(version: String) = "Version $version"
     override fun chartTimespanMinutes(minutes: Int) = "${minutes} Min."
 }
 

@@ -210,6 +210,16 @@ interface SettingsStrings {
     val language: String
     val languageSubtitle: String
     val languageSystemDefault: String
+    val appVersion: String
+    val openSource: String
+    val openSourceSubtitle: String
+    val openSourceLibraries: String
+    val thirdPartySdk: String
+    val libraryVersion: String
+    val license: String
+    val projectWebsite: String
+    val garminSdkNote: String
+    fun appVersionValue(version: String): String
     fun chartTimespanMinutes(minutes: Int): String
 }
 
