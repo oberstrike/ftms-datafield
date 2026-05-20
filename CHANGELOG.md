@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1
+
+- Persists running workout sessions while they are active so interrupted sessions can be recovered with samples and stats.
+- Avoids stopping foreground-service protection for a newly started bridge while a previous session is still finishing.
+- Adds nested settings pages for bridge behavior, dashboard metrics, timing, language, debug logging, remembered devices, and power estimation.
+- Adds configurable dashboard metrics, live chart selections, and session history reporting.
+- Adds a Settings Open Source view with direct library versions, licenses, a Garmin SDK notice, and the Android app version.
+
 ## v1.0.0
 
 Initial public Android bridge release.

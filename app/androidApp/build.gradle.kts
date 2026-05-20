@@ -11,8 +11,8 @@ android {
         applicationId = "de.ma.ftms.bridge"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10001
+        versionName = "1.0.1"
 
         buildConfigField("String", "LIBRARY_VERSION_KOTLIN", "\"${libs.versions.kotlin.get()}\"")
         buildConfigField("String", "LIBRARY_VERSION_ANDROIDX_ACTIVITY", "\"${libs.versions.androidxActivityCompose.get()}\"")
