@@ -5,20 +5,27 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     var _bleClient;
     var _phoneBridge;
     var _fitWriter;
+    var _heartRatePublisher;
     var _lastWrittenPacketCount = 0;
+    var _primaryMetric = FtmsVariant.METRIC_ASCENT;
 
     function initialize() {
         SimpleDataField.initialize();
 
-        // What Garmin shows as the field label.
-        label = FtmsVariant.LABEL;
+        refreshSettings();
 
         FtmsState.reset();
         _fitWriter = new FtmsFitWriter(self);
+        _heartRatePublisher = new GarminHeartRatePublisher();
         _phoneBridge = new FtmsPhoneBridgeReceiver();
         _phoneBridge.start();
         _bleClient = new FtmsBleClient();
         _bleClient.start();
+    }
+
+    function refreshSettings() {
+        _primaryMetric = FtmsSettings.primaryMetric();
+        label = FtmsSettings.metricLabel(_primaryMetric);
     }
 
     function onHide() {
@@ -34,6 +41,10 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     }
 
     function compute(info) {
+        if (_heartRatePublisher != null) {
+            _heartRatePublisher.publish(info);
+        }
+
         if (_bleClient != null) {
             if (FtmsState.hasFreshPhoneBridge(5000)) {
                 _bleClient.pauseForPhoneBridge();
@@ -61,6 +72,6 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
             return "STALE";
         }
 
-        return FtmsMetricFormatter.primary(sample, _fitWriter.getAscentM());
+        return FtmsMetricFormatter.primary(sample, _fitWriter.getAscentM(), _primaryMetric);
     }
 }

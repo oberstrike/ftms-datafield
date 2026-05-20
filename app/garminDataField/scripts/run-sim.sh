@@ -3,10 +3,9 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVICE="${DEVICE:-fr970}"
-VARIANT="${VARIANT:-ascent}"
-PRG_FILE="$PROJECT_DIR/build/outputs/FtmsDataField-${VARIANT}-${DEVICE}.prg"
+PRG_FILE="$PROJECT_DIR/build/outputs/FtmsBridgeField-${DEVICE}.prg"
 
-VARIANT="$VARIANT" "$PROJECT_DIR/scripts/build.sh"
+"$PROJECT_DIR/scripts/build.sh"
 
 if ! command -v connectiq >/dev/null 2>&1; then
   echo "ERROR: connectiq not found. Add the active Garmin Connect IQ SDK bin directory to PATH." >&2

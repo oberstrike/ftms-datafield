@@ -48,6 +48,39 @@ class SqlDelightSessionHistoryRepositoryTest {
     }
 
     @Test
+    fun savesFinishedSessionWithSamplesAtomically() = runTest {
+        val repository = repository()
+        val firstSample = sample(timestamp = 2_000L, distance = 10.0)
+        val secondSample = sample(timestamp = 3_000L, distance = 20.0)
+        val resetSample = sample(timestamp = 4_000L, distance = 0.0)
+
+        val saved = repository.saveFinishedSession(
+            startedAtMillis = 1_000L,
+            stoppedAtMillis = 5_000L,
+            finalStatus = "stopped",
+            treadmillName = "FS-BC11B7",
+            treadmillAddress = "AA:BB",
+            garminName = "FR970",
+            garminId = 42L,
+            stats = SessionStatsSnapshot(
+                packetCount = 3,
+                sendSuccessCount = 2,
+                sendFailureCount = 0,
+                lastError = "",
+                latest = resetSample,
+            ),
+            samples = listOf(firstSample, secondSample, resetSample),
+        )
+
+        assertEquals("stopped", saved.finalStatus)
+        assertEquals(5_000L, saved.stoppedAtMillis)
+        assertEquals(20.0, saved.finalDistanceM)
+        assertEquals(0.5, saved.finalAscentM)
+        assertEquals(listOf(saved.sessionId), repository.observeRecentSessions().first().map { it.sessionId })
+        assertEquals(listOf(1_000L, 2_000L, 3_000L), repository.observeSamples(saved.sessionId).first().map { it.offsetMillis })
+    }
+
+    @Test
     fun observesRecentSessionsNewestFirst() = runTest {
         val repository = repository()
 
@@ -94,6 +127,39 @@ class SqlDelightSessionHistoryRepositoryTest {
         assertEquals(session.sessionId, recovered.sessionId)
         assertEquals("interrupted", recovered.finalStatus)
         assertEquals(5_000L, recovered.stoppedAtMillis)
+    }
+
+    @Test
+    fun recoveryPreservesRunningSessionSamplesAndStats() = runTest {
+        val repository = repository()
+        val session = repository.createSession(1_000L, "FS-BC11B7", "AA:BB", "FR970", 42L)
+        val firstSample = sample(timestamp = 2_000L, distance = 10.0)
+        val secondSample = sample(timestamp = 3_000L, distance = 20.0)
+        repository.appendSample(session.sessionId, session.startedAtMillis, firstSample)
+        repository.appendSample(session.sessionId, session.startedAtMillis, secondSample)
+        repository.updateStats(
+            sessionId = session.sessionId,
+            nowMillis = 3_500L,
+            stats = SessionStatsSnapshot(
+                packetCount = 2,
+                sendSuccessCount = 1,
+                sendFailureCount = 1,
+                lastError = "send failed",
+                latest = secondSample,
+            ),
+        )
+
+        repository.recoverInterruptedSessions(5_000L)
+
+        val recovered = repository.latestSession()
+        assertNotNull(recovered)
+        assertEquals("interrupted", recovered.finalStatus)
+        assertEquals(2, recovered.packetCount)
+        assertEquals(1, recovered.sendSuccessCount)
+        assertEquals(1, recovered.sendFailureCount)
+        assertEquals("send failed", recovered.lastError)
+        assertEquals(20.0, recovered.finalDistanceM)
+        assertEquals(listOf(1_000L, 2_000L), repository.observeSamples(session.sessionId).first().map { it.offsetMillis })
     }
 
     @Test

@@ -9,7 +9,7 @@ import com.garmin.android.connectiq.exception.ServiceUnavailableException
 import de.ma.ftms.bridge.debug.BridgeLogger
 import de.ma.ftms.bridge.runtime.GarminDeviceItem
 import de.ma.ftms.bridge.runtime.WATCH_APP_ID
-import de.ma.ftms.bridge.runtime.WATCH_VARIANT_APP_IDS
+import de.ma.ftms.bridge.runtime.WATCH_APP_IDS
 
 internal class GarminBridgeClient(
     private val context: Context,
@@ -19,6 +19,7 @@ internal class GarminBridgeClient(
         fun onDevicesLoaded(devices: List<GarminDeviceItem>)
         fun onDeviceUpdated(device: GarminDeviceItem)
         fun onDiscoveryStatusChanged(sdkStatus: String, knownDeviceCount: Int, message: String)
+        fun onGarminHeartRate(deviceId: Long, bpm: Int)
         fun onSendStatus(status: String)
         fun log(message: String)
     }
@@ -27,7 +28,8 @@ internal class GarminBridgeClient(
     private var initialized = false
     private var knownDeviceCount = 0
     private val devicesById = mutableMapOf<Long, IQDevice>()
-    private val installedAppIdsByDevice = mutableMapOf<Long, MutableSet<String>>()
+    private val installedAppIdsByDeviceId = mutableMapOf<Long, Set<String>>()
+    private val registeredAppEventIdsByDeviceId = mutableMapOf<Long, Set<String>>()
 
     fun initialize() {
         if (connectIQ != null) {
@@ -98,6 +100,7 @@ internal class GarminBridgeClient(
 
         knownDeviceCount = devices.size
         devicesById.clear()
+        installedAppIdsByDeviceId.clear()
         devices.forEach { device ->
             devicesById[device.deviceIdentifier] = device
             runCatching {
@@ -118,7 +121,7 @@ internal class GarminBridgeClient(
         callbacks.log("Loaded ${devices.size} Garmin device(s)")
     }
 
-    fun send(deviceId: Long, payload: Map<String, Any>, sendToAllInstalledVariants: Boolean) {
+    fun send(deviceId: Long, payload: Map<String, Any>) {
         val sdk = connectIQ
         val device = devicesById[deviceId]
         if (!initialized || sdk == null || device == null) {
@@ -127,15 +130,10 @@ internal class GarminBridgeClient(
             return
         }
 
-        val appIds = if (sendToAllInstalledVariants) {
-            installedAppIdsByDevice[deviceId]?.takeIf { it.isNotEmpty() } ?: WATCH_VARIANT_APP_IDS.toSet()
-        } else {
-            setOf(WATCH_APP_ID)
-        }
         val payloadType = payload["type"]?.toString().orEmpty()
         val sendKind = if (payloadType == "ftms_stop") "stop" else "sample"
 
-        appIds.forEach { appId ->
+        compatibleAppIdsForSend(installedAppIdsByDeviceId[deviceId]).forEach { appId ->
             try {
                 BridgeLogger.debug(TAG, "Sending message deviceId=$deviceId appId=${appId.take(8)} payload=$payload")
                 sdk.sendMessage(device, IQApp(appId), payload) { _, _, status ->
@@ -154,10 +152,10 @@ internal class GarminBridgeClient(
     }
 
     private fun verifyAppsInstalled(sdk: ConnectIQ, device: IQDevice) {
-        installedAppIdsByDevice[device.deviceIdentifier] = mutableSetOf()
+        installedAppIdsByDeviceId[device.deviceIdentifier] = emptySet()
         callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
 
-        WATCH_VARIANT_APP_IDS.forEach { appId ->
+        WATCH_APP_IDS.forEach { appId ->
             try {
                 BridgeLogger.debug(TAG, "Checking app install deviceId=${device.deviceIdentifier} appId=${appId.take(8)}")
                 sdk.getApplicationInfo(
@@ -167,25 +165,72 @@ internal class GarminBridgeClient(
                         override fun onApplicationInfoReceived(app: IQApp) {
                             BridgeLogger.debug(TAG, "App info appId=${appId.take(8)} status=${app.status}")
                             if (app.status == IQApp.IQAppStatus.INSTALLED) {
-                                installedAppIdsByDevice.getOrPut(device.deviceIdentifier) { mutableSetOf() }.add(appId)
+                                installedAppIdsByDeviceId[device.deviceIdentifier] =
+                                    installedAppIdsByDeviceId.orEmptySet(device.deviceIdentifier) + appId
+                                registerForAppEvents(sdk, device, appId)
                                 callbacks.onDeviceUpdated(device.toUiItem(appInstalled = true))
                             }
                         }
 
                         override fun onApplicationNotInstalled(applicationId: String) {
                             BridgeLogger.debug(TAG, "App not installed appId=${applicationId.take(8)}")
-                            val hasAny = installedAppIdsByDevice[device.deviceIdentifier]?.isNotEmpty() == true
-                            callbacks.onDeviceUpdated(device.toUiItem(appInstalled = hasAny))
+                            if (installedAppIdsByDeviceId.orEmptySet(device.deviceIdentifier).isEmpty()) {
+                                callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
+                            }
                         }
                     },
                 )
             } catch (_: InvalidStateException) {
                 BridgeLogger.warn(TAG, "App install check invalid state appId=${appId.take(8)}")
-                callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
+                if (installedAppIdsByDeviceId.orEmptySet(device.deviceIdentifier).isEmpty()) {
+                    callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
+                }
             } catch (_: ServiceUnavailableException) {
                 BridgeLogger.warn(TAG, "App install check service unavailable appId=${appId.take(8)}")
-                callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
+                if (installedAppIdsByDeviceId.orEmptySet(device.deviceIdentifier).isEmpty()) {
+                    callbacks.onDeviceUpdated(device.toUiItem(appInstalled = false))
+                }
             }
+        }
+    }
+
+    private fun Map<Long, Set<String>>.orEmptySet(deviceId: Long): Set<String> =
+        this[deviceId] ?: emptySet()
+
+    private fun registerForAppEvents(sdk: ConnectIQ, device: IQDevice, appId: String) {
+        val deviceId = device.deviceIdentifier
+        if (appId in registeredAppEventIdsByDeviceId.orEmptySet(deviceId)) {
+            return
+        }
+
+        try {
+            sdk.registerForAppEvents(
+                device,
+                IQApp(appId),
+                object : ConnectIQ.IQApplicationEventListener {
+                    override fun onMessageReceived(
+                        device: IQDevice,
+                        app: IQApp,
+                        message: List<Any>,
+                        status: ConnectIQ.IQMessageStatus,
+                    ) {
+                        if (status != ConnectIQ.IQMessageStatus.SUCCESS) {
+                            BridgeLogger.debug(TAG, "App message status=$status appId=${app.applicationId.take(8)}")
+                            return
+                        }
+
+                        val bpm = parseGarminHeartRateMessage(message) ?: return
+                        callbacks.onGarminHeartRate(device.deviceIdentifier, bpm)
+                        BridgeLogger.debug(TAG, "Garmin HR message deviceId=${device.deviceIdentifier} bpm=$bpm")
+                    }
+                },
+            )
+            registeredAppEventIdsByDeviceId[deviceId] = registeredAppEventIdsByDeviceId.orEmptySet(deviceId) + appId
+            BridgeLogger.debug(TAG, "Registered app event listener deviceId=$deviceId appId=${appId.take(8)}")
+        } catch (_: InvalidStateException) {
+            BridgeLogger.warn(TAG, "App event registration invalid state appId=${appId.take(8)}")
+        } catch (_: ServiceUnavailableException) {
+            BridgeLogger.warn(TAG, "App event registration service unavailable appId=${appId.take(8)}")
         }
     }
 
@@ -207,4 +252,32 @@ internal class GarminBridgeClient(
     }
 }
 
+internal fun parseGarminHeartRateMessage(message: List<Any?>): Int? {
+    val payload = message.asSequence()
+        .mapNotNull { it as? Map<*, *> }
+        .firstOrNull()
+        ?: return null
+
+    if (payload["type"] != GARMIN_HEART_RATE_MESSAGE_TYPE) {
+        return null
+    }
+
+    return payload["hr"].toHeartRateBpm()
+}
+
+private fun Any?.toHeartRateBpm(): Int? {
+    val value = when (this) {
+        is Number -> toInt()
+        is String -> toIntOrNull()
+        else -> null
+    }
+    return value?.takeIf { it in 1..255 }
+}
+
+internal fun compatibleAppIdsForSend(installedAppIds: Set<String>?): List<String> {
+    val installed = installedAppIds.orEmpty()
+    return WATCH_APP_IDS.filter { it in installed }.ifEmpty { listOf(WATCH_APP_ID) }
+}
+
+private const val GARMIN_HEART_RATE_MESSAGE_TYPE = "garmin_hr"
 private const val TAG = "GarminCiq"

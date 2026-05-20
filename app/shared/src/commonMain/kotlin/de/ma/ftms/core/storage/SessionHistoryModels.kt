@@ -55,4 +55,7 @@ data class SessionStatsSnapshot(
     val sendFailureCount: Int,
     val lastError: String,
     val latest: SmoothedFtmsSample?,
+    val finalDistanceM: Double? = null,
+    val finalAscentM: Double? = null,
+    val finalSpeedKmh: Double? = null,
 )

@@ -40,4 +40,35 @@ class SessionStatsTest {
         assertEquals(5.6, summary.finalAscentM)
         assertEquals(6.0, summary.finalSpeedKmh)
     }
+
+    @Test
+    fun keepsHighestSessionTotalsWhenLastPacketResets() {
+        val stats = SessionStats { 100L }
+
+        stats.start()
+        stats.recordPacket(
+            SmoothedTreadmillSample(
+                raw = TreadmillSample(speedKmh = 6.0),
+                distanceM = 123.4,
+                ascentM = 5.6,
+                distanceSource = DistanceSource.SPEED_TIME,
+            ),
+        )
+        stats.recordPacket(
+            SmoothedTreadmillSample(
+                raw = TreadmillSample(speedKmh = 0.0),
+                distanceM = 0.0,
+                ascentM = 0.0,
+                distanceSource = DistanceSource.FTMS,
+            ),
+        )
+
+        val summary = stats.finish("stopped")
+        val snapshot = stats.snapshot()
+
+        assertEquals(123.4, summary.finalDistanceM)
+        assertEquals(5.6, summary.finalAscentM)
+        assertEquals(123.4, snapshot.finalDistanceM)
+        assertEquals(5.6, snapshot.finalAscentM)
+    }
 }

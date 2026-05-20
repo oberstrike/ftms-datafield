@@ -22,6 +22,8 @@ class SessionStats(
         private set
     var latest: SmoothedTreadmillSample? = null
         private set
+    private var maxDistanceM: Double = 0.0
+    private var maxAscentM: Double = 0.0
 
     fun start() {
         startedAtMillis = nowMillis()
@@ -32,10 +34,14 @@ class SessionStats(
         lastPacketAtMillis = 0
         lastError = ""
         latest = null
+        maxDistanceM = 0.0
+        maxAscentM = 0.0
     }
 
     fun recordPacket(sample: SmoothedTreadmillSample) {
         latest = sample
+        maxDistanceM = maxOf(maxDistanceM, sample.distanceM)
+        maxAscentM = maxOf(maxAscentM, sample.ascentM)
         packetCount += 1
         lastPacketAtMillis = nowMillis()
     }
@@ -64,8 +70,8 @@ class SessionStats(
             sendSuccessCount = sendSuccessCount,
             sendFailureCount = sendFailureCount,
             lastError = lastError,
-            finalDistanceM = finalSample?.distanceM ?: 0.0,
-            finalAscentM = finalSample?.ascentM ?: 0.0,
+            finalDistanceM = maxDistanceM,
+            finalAscentM = maxAscentM,
             finalSpeedKmh = finalSample?.raw?.speedKmh ?: 0.0,
         )
     }
@@ -77,5 +83,8 @@ class SessionStats(
             sendFailureCount = sendFailureCount,
             lastError = lastError,
             latest = latest,
+            finalDistanceM = maxDistanceM,
+            finalAscentM = maxAscentM,
+            finalSpeedKmh = latest?.raw?.speedKmh,
         )
 }

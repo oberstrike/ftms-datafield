@@ -290,7 +290,7 @@ fun VerticalGap(height: Int = 8) {
 
 fun startBlockReason(state: BridgeUiState, strings: Strings): String? =
     when {
-        state.running -> strings.dashboard.startBlockBridgeRunning
+        state.running && !state.paused -> strings.dashboard.startBlockBridgeRunning
         !state.permissionsGranted -> strings.dashboard.startBlockBluetoothPermissions
         !state.bleAvailable -> strings.dashboard.startBlockBluetoothUnavailable
         state.selectedTreadmillAddress == null -> strings.dashboard.startBlockSelectFtms

@@ -8,7 +8,7 @@ import de.ma.ftms.core.storage.WorkoutSessionRecord
 import java.util.UUID
 
 internal const val WATCH_APP_ID = "8eb0b6152ef04aa7a1687c67ce46bfdf"
-internal val WATCH_VARIANT_APP_IDS = listOf(
+internal val WATCH_APP_IDS = listOf(
     WATCH_APP_ID,
     "bc58d0ad4f40470f8a5303b891839681",
     "f87c0efb71f44bf79f965d95f4261f89",
@@ -62,14 +62,89 @@ data class LastSessionSummary(
     val finalSpeedKmh: Double = 0.0,
 )
 
+enum class DashboardMetricKey {
+    SPEED,
+    PACE,
+    AVG_PACE,
+    INCLINE,
+    AVG_INCLINE,
+    DISTANCE,
+    ASCENT,
+    ASCENT_RATE,
+    POWER,
+    HEART_RATE,
+    CADENCE_STEP,
+    ELAPSED,
+    RESISTANCE,
+    MACHINE,
+}
+
+val DEFAULT_DASHBOARD_METRICS: List<DashboardMetricKey> = listOf(
+    DashboardMetricKey.SPEED,
+    DashboardMetricKey.PACE,
+    DashboardMetricKey.AVG_PACE,
+    DashboardMetricKey.INCLINE,
+    DashboardMetricKey.AVG_INCLINE,
+    DashboardMetricKey.DISTANCE,
+    DashboardMetricKey.ASCENT,
+    DashboardMetricKey.ASCENT_RATE,
+    DashboardMetricKey.POWER,
+    DashboardMetricKey.HEART_RATE,
+    DashboardMetricKey.CADENCE_STEP,
+    DashboardMetricKey.ELAPSED,
+    DashboardMetricKey.MACHINE,
+    DashboardMetricKey.RESISTANCE,
+)
+
+val DEFAULT_DASHBOARD_GRAPHS: List<DashboardMetricKey> = listOf(
+    DashboardMetricKey.SPEED,
+    DashboardMetricKey.PACE,
+    DashboardMetricKey.AVG_PACE,
+    DashboardMetricKey.INCLINE,
+    DashboardMetricKey.AVG_INCLINE,
+    DashboardMetricKey.DISTANCE,
+    DashboardMetricKey.ASCENT,
+    DashboardMetricKey.ASCENT_RATE,
+    DashboardMetricKey.POWER,
+    DashboardMetricKey.HEART_RATE,
+    DashboardMetricKey.CADENCE_STEP,
+    DashboardMetricKey.RESISTANCE,
+)
+
+enum class DashboardChartTimespan(val durationMillis: Long?) {
+    MINUTES_1(60_000L),
+    MINUTES_5(5 * 60_000L),
+    MINUTES_10(10 * 60_000L),
+    MINUTES_30(30 * 60_000L),
+    FULL_SESSION(null),
+}
+
+enum class HeartRateSource {
+    GARMIN,
+    MACHINE,
+}
+
+enum class PowerSource {
+    FTMS_PREFERRED,
+    CALCULATED,
+}
+
 data class BridgeSettings(
-    val sendToAllInstalledVariants: Boolean = true,
     val autoReconnect: Boolean = true,
     val packetTimeoutSeconds: Int = 15,
     val sendIntervalMillis: Long = DEFAULT_SEND_INTERVAL_MS,
     val maxLogEntries: Int = 5_000,
     val debugLoggingEnabled: Boolean = false,
     val language: AppLanguage = AppLanguage.SYSTEM_DEFAULT,
+    val showOpenAppNotificationAction: Boolean = true,
+    val heartRateSource: HeartRateSource = HeartRateSource.GARMIN,
+    val powerCalculationEnabled: Boolean = false,
+    val powerSource: PowerSource = PowerSource.FTMS_PREFERRED,
+    val powerBodyMassKg: Double? = null,
+    val powerFlatCost: Double? = 1.22,
+    val dashboardMetrics: List<DashboardMetricKey> = DEFAULT_DASHBOARD_METRICS,
+    val dashboardGraphs: List<DashboardMetricKey> = DEFAULT_DASHBOARD_GRAPHS,
+    val dashboardChartTimespan: DashboardChartTimespan = DashboardChartTimespan.MINUTES_10,
 ) {
     val packetTimeoutMillis: Long
         get() = packetTimeoutSeconds * 1_000L
@@ -80,6 +155,8 @@ data class BridgeUiState(
     val bleAvailable: Boolean = false,
     val scanning: Boolean = false,
     val running: Boolean = false,
+    val paused: Boolean = false,
+    val activeDurationMillis: Long = 0,
     val treadmillConnected: Boolean = false,
     val garminReady: Boolean = false,
     val selectedTreadmillAddress: String? = null,
@@ -92,6 +169,7 @@ data class BridgeUiState(
     val garminKnownDeviceCount: Int = 0,
     val garminLastMessage: String = "",
     val latest: SmoothedTreadmillSample? = null,
+    val liveDashboardSamples: List<SmoothedTreadmillSample> = emptyList(),
     val lastSendStatus: String = "idle",
     val reconnectStatus: String = "idle",
     val nextRetryDelayMs: Long = 0,

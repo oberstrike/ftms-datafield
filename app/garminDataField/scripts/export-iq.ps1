@@ -17,6 +17,10 @@ if (-not $env:GARMIN_DEVELOPER_KEY) {
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 Set-Location $ProjectDir
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*.prg") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*.prg.debug.xml") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*-fit_contributions.json") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*-settings.json") -ErrorAction SilentlyContinue
 
 Write-Host "Exporting Connect IQ package..."
 & monkeyc -f monkey.jungle -y $env:GARMIN_DEVELOPER_KEY -o $OutFile -e -w

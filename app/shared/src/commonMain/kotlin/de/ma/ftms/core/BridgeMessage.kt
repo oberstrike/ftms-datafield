@@ -37,5 +37,12 @@ data class BridgeMessage(
                 "type" to "ftms_stop",
                 "seq" to sequence,
             )
+
+        fun controlMap(sequence: Int, type: String): Map<String, Any> =
+            mapOf(
+                "v" to 2,
+                "type" to type,
+                "seq" to sequence,
+            )
     }
 }

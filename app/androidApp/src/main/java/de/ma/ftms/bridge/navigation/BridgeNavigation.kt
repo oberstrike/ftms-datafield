@@ -6,6 +6,8 @@ import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.router.stack.StackNavigation
 import com.arkivanov.decompose.router.stack.bringToFront
 import com.arkivanov.decompose.router.stack.childStack
+import com.arkivanov.decompose.router.stack.pop
+import com.arkivanov.decompose.router.stack.pushToFront
 import com.arkivanov.decompose.value.Value
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -36,6 +38,7 @@ interface RootComponent {
 interface DashboardComponent {
     val state: StateFlow<BridgeUiState>
     fun onStartBridge(context: Context)
+    fun onPauseBridge()
     fun onStopBridge()
 }
 
@@ -63,8 +66,23 @@ interface LogsComponent {
 
 interface SettingsComponent {
     val state: StateFlow<BridgeUiState>
+    val childStack: Value<ChildStack<*, Child>>
     fun onUpdateSettings(settings: BridgeSettings)
     fun onClearRememberedSelections()
+    fun navigateTo(config: SettingsConfig)
+    fun onBack()
+
+    sealed class Child {
+        data object Overview : Child()
+        data object Bridge : Child()
+        data object Power : Child()
+        data object Dashboard : Child()
+        data object Timing : Child()
+        data object Language : Child()
+        data object Debug : Child()
+        data object RememberedDevices : Child()
+        data object OpenSource : Child()
+    }
 }
 
 class DefaultRootComponent(
@@ -102,6 +120,7 @@ private class DefaultDashboardComponent(
     ComponentContext by componentContext {
     override val state: StateFlow<BridgeUiState> = BridgeRuntime.state
     override fun onStartBridge(context: Context) = BridgeRuntime.startBridge(context)
+    override fun onPauseBridge() = BridgeRuntime.pauseBridge()
     override fun onStopBridge() = BridgeRuntime.stopBridge()
 }
 
@@ -142,9 +161,46 @@ private class DefaultSettingsComponent(
     componentContext: ComponentContext,
 ) : SettingsComponent,
     ComponentContext by componentContext {
+    private val navigation = StackNavigation<SettingsConfig>()
+
     override val state: StateFlow<BridgeUiState> = BridgeRuntime.state
+    override val childStack: Value<ChildStack<*, SettingsComponent.Child>> = childStack(
+        source = navigation,
+        serializer = null,
+        initialConfiguration = SettingsConfig.Overview,
+        handleBackButton = true,
+        childFactory = ::createChild,
+    )
+
     override fun onUpdateSettings(settings: BridgeSettings) = BridgeRuntime.updateSettings(settings)
     override fun onClearRememberedSelections() = BridgeRuntime.clearRememberedSelections()
+    override fun navigateTo(config: SettingsConfig) = navigation.pushToFront(config)
+    override fun onBack() = navigation.pop()
+
+    private fun createChild(config: SettingsConfig, componentContext: ComponentContext): SettingsComponent.Child =
+        when (config) {
+            SettingsConfig.Overview -> SettingsComponent.Child.Overview
+            SettingsConfig.Bridge -> SettingsComponent.Child.Bridge
+            SettingsConfig.Power -> SettingsComponent.Child.Power
+            SettingsConfig.Dashboard -> SettingsComponent.Child.Dashboard
+            SettingsConfig.Timing -> SettingsComponent.Child.Timing
+            SettingsConfig.Language -> SettingsComponent.Child.Language
+            SettingsConfig.Debug -> SettingsComponent.Child.Debug
+            SettingsConfig.RememberedDevices -> SettingsComponent.Child.RememberedDevices
+            SettingsConfig.OpenSource -> SettingsComponent.Child.OpenSource
+        }
+}
+
+sealed class SettingsConfig {
+    data object Overview : SettingsConfig()
+    data object Bridge : SettingsConfig()
+    data object Power : SettingsConfig()
+    data object Dashboard : SettingsConfig()
+    data object Timing : SettingsConfig()
+    data object Language : SettingsConfig()
+    data object Debug : SettingsConfig()
+    data object RememberedDevices : SettingsConfig()
+    data object OpenSource : SettingsConfig()
 }
 
 sealed class NavigationConfig {

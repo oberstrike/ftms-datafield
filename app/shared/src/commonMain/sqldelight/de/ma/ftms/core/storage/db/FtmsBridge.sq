@@ -95,6 +95,26 @@ INSERT INTO workout_session(
     updated_at_millis
 ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, 0, 0, '', 0.0, 0.0, 0.0, ?);
 
+insertFinishedSession:
+INSERT INTO workout_session(
+    session_id,
+    started_at_millis,
+    stopped_at_millis,
+    final_status,
+    treadmill_name,
+    treadmill_address,
+    garmin_name,
+    garmin_id,
+    packet_count,
+    send_success_count,
+    send_failure_count,
+    last_error,
+    final_distance_m,
+    final_ascent_m,
+    final_speed_kmh,
+    updated_at_millis
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
 insertSample:
 INSERT INTO session_sample(
     session_id,

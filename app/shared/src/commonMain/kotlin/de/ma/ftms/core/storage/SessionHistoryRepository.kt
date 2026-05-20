@@ -17,6 +17,17 @@ interface SessionHistoryRepository {
     ): WorkoutSessionRecord
     suspend fun appendSample(sessionId: String, startedAtMillis: Long, sample: SmoothedFtmsSample)
     suspend fun updateStats(sessionId: String, nowMillis: Long, stats: SessionStatsSnapshot)
+    suspend fun saveFinishedSession(
+        startedAtMillis: Long,
+        stoppedAtMillis: Long,
+        finalStatus: String,
+        treadmillName: String?,
+        treadmillAddress: String?,
+        garminName: String?,
+        garminId: Long?,
+        stats: SessionStatsSnapshot,
+        samples: List<SmoothedFtmsSample>,
+    ): WorkoutSessionRecord
     suspend fun finishSession(
         sessionId: String,
         stoppedAtMillis: Long,

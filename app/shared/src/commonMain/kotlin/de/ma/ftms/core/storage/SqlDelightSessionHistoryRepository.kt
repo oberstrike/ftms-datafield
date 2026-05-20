@@ -68,48 +68,65 @@ class SqlDelightSessionHistoryRepository(
         startedAtMillis: Long,
         sample: SmoothedFtmsSample,
     ) = withContext(databaseContext) {
-        val raw = sample.raw
-        val timestamp = raw.timestampMillis ?: System.currentTimeMillis()
-        queries.insertSample(
-            session_id = sessionId,
-            timestamp_millis = timestamp,
-            offset_millis = (timestamp - startedAtMillis).coerceAtLeast(0L),
-            kind = raw.kind.toLong(),
-            raw_flags = raw.rawFlags.toLong(),
-            raw_hex = raw.rawHex,
-            speed_kmh = raw.speedKmh,
-            raw_distance_m = raw.distanceM?.toLong(),
-            smoothed_distance_m = sample.distanceM,
-            ascent_m = sample.ascentM,
-            incline_pct = raw.inclinePct,
-            power_w = raw.powerW?.toLong(),
-            heart_rate_bpm = raw.heartRateBpm?.toLong(),
-            cadence_rpm = raw.cadenceRpm,
-            step_rate_spm = raw.stepRateSpm,
-            resistance = raw.resistance,
-            elapsed_s = raw.elapsedS?.toLong(),
-            remaining_s = raw.remainingS?.toLong(),
-            parse_error = raw.parseError,
-            distance_source = sample.distanceSource.name,
-        )
+        insertSampleRow(sessionId, startedAtMillis, sample)
         Unit
     }
 
     override suspend fun updateStats(sessionId: String, nowMillis: Long, stats: SessionStatsSnapshot) =
         withContext(databaseContext) {
+            val finalStats = stats.deriveFinalStats()
             queries.updateSessionStats(
                 packet_count = stats.packetCount.toLong(),
                 send_success_count = stats.sendSuccessCount.toLong(),
                 send_failure_count = stats.sendFailureCount.toLong(),
                 last_error = stats.lastError,
-                final_distance_m = stats.latest?.distanceM ?: 0.0,
-                final_ascent_m = stats.latest?.ascentM ?: 0.0,
-                final_speed_kmh = stats.latest?.raw?.speedKmh ?: 0.0,
+                final_distance_m = finalStats.distanceM,
+                final_ascent_m = finalStats.ascentM,
+                final_speed_kmh = finalStats.speedKmh,
                 updated_at_millis = nowMillis,
                 session_id = sessionId,
             )
             Unit
         }
+
+    override suspend fun saveFinishedSession(
+        startedAtMillis: Long,
+        stoppedAtMillis: Long,
+        finalStatus: String,
+        treadmillName: String?,
+        treadmillAddress: String?,
+        garminName: String?,
+        garminId: Long?,
+        stats: SessionStatsSnapshot,
+        samples: List<SmoothedFtmsSample>,
+    ): WorkoutSessionRecord = withContext(databaseContext) {
+        val id = newSessionId(startedAtMillis)
+        val finalStats = stats.deriveFinalStats(samples)
+        queries.transaction {
+            queries.insertFinishedSession(
+                session_id = id,
+                started_at_millis = startedAtMillis,
+                stopped_at_millis = stoppedAtMillis,
+                final_status = finalStatus,
+                treadmill_name = treadmillName,
+                treadmill_address = treadmillAddress,
+                garmin_name = garminName,
+                garmin_id = garminId,
+                packet_count = stats.packetCount.toLong(),
+                send_success_count = stats.sendSuccessCount.toLong(),
+                send_failure_count = stats.sendFailureCount.toLong(),
+                last_error = stats.lastError,
+                final_distance_m = finalStats.distanceM,
+                final_ascent_m = finalStats.ascentM,
+                final_speed_kmh = finalStats.speedKmh,
+                updated_at_millis = stoppedAtMillis,
+            )
+            samples.forEach { sample ->
+                insertSampleRow(id, startedAtMillis, sample)
+            }
+        }
+        queries.selectSessionById(id).executeAsOne().toRecord()
+    }
 
     override suspend fun finishSession(
         sessionId: String,
@@ -117,6 +134,8 @@ class SqlDelightSessionHistoryRepository(
         finalStatus: String,
         stats: SessionStatsSnapshot,
     ): WorkoutSessionRecord? = withContext(databaseContext) {
+        val samples = queries.selectSamplesForSession(sessionId).executeAsList()
+        val finalStats = stats.deriveFinalStats(samples.deriveFinalStats())
         queries.finishSession(
             stopped_at_millis = stoppedAtMillis,
             final_status = finalStatus,
@@ -124,9 +143,9 @@ class SqlDelightSessionHistoryRepository(
             send_success_count = stats.sendSuccessCount.toLong(),
             send_failure_count = stats.sendFailureCount.toLong(),
             last_error = stats.lastError,
-            final_distance_m = stats.latest?.distanceM ?: 0.0,
-            final_ascent_m = stats.latest?.ascentM ?: 0.0,
-            final_speed_kmh = stats.latest?.raw?.speedKmh ?: 0.0,
+            final_distance_m = finalStats.distanceM,
+            final_ascent_m = finalStats.ascentM,
+            final_speed_kmh = finalStats.speedKmh,
             updated_at_millis = stoppedAtMillis,
             session_id = sessionId,
         )
@@ -197,6 +216,76 @@ class SqlDelightSessionHistoryRepository(
             parseError = parse_error,
             distanceSource = runCatching { DistanceSource.valueOf(distance_source) }.getOrDefault(DistanceSource.NONE),
         )
+
+    private fun SessionStatsSnapshot.deriveFinalStats(samples: List<SmoothedFtmsSample> = emptyList()): FinalSessionStats =
+        FinalSessionStats(
+            distanceM = maxOf(
+                finalDistanceM ?: 0.0,
+                latest?.distanceM ?: 0.0,
+                samples.maxOfOrNull { it.distanceM } ?: 0.0,
+            ),
+            ascentM = maxOf(
+                finalAscentM ?: 0.0,
+                latest?.ascentM ?: 0.0,
+                samples.maxOfOrNull { it.ascentM } ?: 0.0,
+            ),
+            speedKmh = finalSpeedKmh ?: latest?.raw?.speedKmh ?: samples.lastOrNull()?.raw?.speedKmh ?: 0.0,
+        )
+
+    private fun SessionStatsSnapshot.deriveFinalStats(sampleStats: FinalSessionStats): FinalSessionStats =
+        FinalSessionStats(
+            distanceM = maxOf(
+                finalDistanceM ?: 0.0,
+                latest?.distanceM ?: 0.0,
+                sampleStats.distanceM,
+            ),
+            ascentM = maxOf(
+                finalAscentM ?: 0.0,
+                latest?.ascentM ?: 0.0,
+                sampleStats.ascentM,
+            ),
+            speedKmh = finalSpeedKmh ?: latest?.raw?.speedKmh ?: sampleStats.speedKmh,
+        )
+
+    private fun List<Session_sample>.deriveFinalStats(): FinalSessionStats =
+        FinalSessionStats(
+            distanceM = maxOfOrNull { it.smoothed_distance_m } ?: 0.0,
+            ascentM = maxOfOrNull { it.ascent_m } ?: 0.0,
+            speedKmh = lastOrNull { it.speed_kmh != null }?.speed_kmh ?: 0.0,
+        )
+
+    private data class FinalSessionStats(
+        val distanceM: Double,
+        val ascentM: Double,
+        val speedKmh: Double,
+    )
+
+    private fun insertSampleRow(sessionId: String, startedAtMillis: Long, sample: SmoothedFtmsSample) {
+        val raw = sample.raw
+        val timestamp = raw.timestampMillis ?: System.currentTimeMillis()
+        queries.insertSample(
+            session_id = sessionId,
+            timestamp_millis = timestamp,
+            offset_millis = (timestamp - startedAtMillis).coerceAtLeast(0L),
+            kind = raw.kind.toLong(),
+            raw_flags = raw.rawFlags.toLong(),
+            raw_hex = raw.rawHex,
+            speed_kmh = raw.speedKmh,
+            raw_distance_m = raw.distanceM?.toLong(),
+            smoothed_distance_m = sample.distanceM,
+            ascent_m = sample.ascentM,
+            incline_pct = raw.inclinePct,
+            power_w = raw.powerW?.toLong(),
+            heart_rate_bpm = raw.heartRateBpm?.toLong(),
+            cadence_rpm = raw.cadenceRpm,
+            step_rate_spm = raw.stepRateSpm,
+            resistance = raw.resistance,
+            elapsed_s = raw.elapsedS?.toLong(),
+            remaining_s = raw.remainingS?.toLong(),
+            parse_error = raw.parseError,
+            distance_source = sample.distanceSource.name,
+        )
+    }
 
     private fun newSessionId(startedAtMillis: Long): String =
         "session-$startedAtMillis-${Random.nextInt().toUInt().toString(16)}"

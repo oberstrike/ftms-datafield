@@ -6,7 +6,7 @@
         entry="FtmsDataFieldApp"
         launcherIcon="@Drawables.LauncherIcon"
         minApiLevel="5.0.0"
-        version="0.1.0">
+        version="1.0.0">
 
         <iq:products>
             <!-- New/current Forerunner line. Build target: fr970 for Forerunner 970. -->
@@ -29,6 +29,7 @@
         </iq:permissions>
 
         <iq:languages>
+            <iq:language>eng</iq:language>
             <iq:language>deu</iq:language>
         </iq:languages>
     </iq:application>

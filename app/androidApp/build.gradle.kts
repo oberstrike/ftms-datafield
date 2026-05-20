@@ -11,8 +11,20 @@ android {
         applicationId = "de.ma.ftms.bridge"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10001
+        versionName = "1.0.1"
+
+        buildConfigField("String", "LIBRARY_VERSION_KOTLIN", "\"${libs.versions.kotlin.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_ANDROIDX_ACTIVITY", "\"${libs.versions.androidxActivityCompose.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_ANDROIDX_CORE", "\"${libs.versions.androidxCore.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_ANDROIDX_LIFECYCLE", "\"${libs.versions.androidxLifecycle.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_COMPOSE", "\"${libs.versions.compose.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_COMPOSE_MATERIAL3", "\"${libs.versions.composeMaterial3.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_DECOMPOSE", "\"${libs.versions.decompose.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_GARMIN_CONNECT_IQ", "\"${libs.versions.garminConnectIq.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_KOTLINX_COROUTINES", "\"${libs.versions.kotlinxCoroutines.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_SQLDELIGHT", "\"${libs.versions.sqldelight.get()}\"")
+        buildConfigField("String", "LIBRARY_VERSION_VICO", "\"${libs.versions.vico.get()}\"")
     }
 
     buildTypes {
@@ -38,6 +50,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

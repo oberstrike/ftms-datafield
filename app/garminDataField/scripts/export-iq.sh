@@ -18,6 +18,10 @@ fi
 
 mkdir -p "$OUT_DIR"
 cd "$PROJECT_DIR"
+rm -f "$OUT_DIR"/FtmsDataField-*-*.prg \
+  "$OUT_DIR"/FtmsDataField-*-*.prg.debug.xml \
+  "$OUT_DIR"/FtmsDataField-*-*-fit_contributions.json \
+  "$OUT_DIR"/FtmsDataField-*-*-settings.json
 
 echo "Exporting Connect IQ package..."
 monkeyc \

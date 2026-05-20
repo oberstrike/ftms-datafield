@@ -1,6 +1,5 @@
 param(
-    [string]$Device = $(if ($env:DEVICE) { $env:DEVICE } else { "fr970" }),
-    [string]$Variant = $(if ($env:VARIANT) { $env:VARIANT } else { "all" })
+    [string]$Device = $(if ($env:DEVICE) { $env:DEVICE } else { "fr970" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,24 +16,14 @@ if (-not $env:GARMIN_DEVELOPER_KEY) {
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 Set-Location $ProjectDir
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*.prg") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*.prg.debug.xml") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*-fit_contributions.json") -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $OutDir "FtmsDataField-*-*-settings.json") -ErrorAction SilentlyContinue
 
-node tools\garmin-variants.mjs prepare
+$outFile = Join-Path $OutDir "FtmsBridgeField-$Device.prg"
 
-node tools\garmin-variants.mjs list | ForEach-Object {
-    $parts = $_ -split "\|"
-    $variantKey = $parts[0]
-    $variantLabel = $parts[1]
-
-    if ($Variant -ne "all" -and $Variant -ne $variantKey) {
-        return
-    }
-
-    $jungleFile = Join-Path $ProjectDir "build\generated\garmin-variants\$variantKey\monkey.jungle"
-    $outFile = Join-Path $OutDir "FtmsDataField-$variantKey-$Device.prg"
-
-    Write-Host "Building $variantLabel ($variantKey) for $Device..."
-    & monkeyc -f $jungleFile -d $Device -y $env:GARMIN_DEVELOPER_KEY -o $outFile -w
-    Write-Host "Built: $outFile"
-}
-
+Write-Host "Building FTMS Bridge Field for $Device..."
+& monkeyc -f monkey.jungle -d $Device -y $env:GARMIN_DEVELOPER_KEY -o $outFile -w
+Write-Host "Built: $outFile"
 Write-Host "For sideloading, copy this .prg to GARMIN/APPS/ on the watch."

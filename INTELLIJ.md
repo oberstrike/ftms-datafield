@@ -60,7 +60,7 @@ $env:DEVICE="fr970"
 Output:
 
 ```text
-app/garminDataField/build/outputs/FtmsDataField-ascent-fr970.prg
+app/garminDataField/build/outputs/FtmsBridgeField-fr970.prg
 ```
 
 Copy the `.prg` file to the watch:

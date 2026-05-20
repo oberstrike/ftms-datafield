@@ -18,6 +18,7 @@ interface CommonStrings {
     val delete: String
     val back: String
     val start: String
+    val pause: String
     val stop: String
     val share: String
     val status: String
@@ -33,11 +34,21 @@ interface CommonStrings {
     val machine: String
     val resistance: String
     val speed: String
+    val averageSpeed: String
     val incline: String
     val power: String
+    val averagePower: String
     val heartRate: String
+    val averageHeartRate: String
     val cadenceStep: String
+    val averageCadenceStep: String
     val elapsed: String
+    val pace: String
+    val averagePace: String
+    val ascentRate: String
+    val averageAscentRate: String
+    val averageIncline: String
+    val averageResistance: String
     fun sendSummary(successCount: Int, failureCount: Int): String
     fun minValue(value: Double): String
     fun maxValue(value: Double): String
@@ -54,14 +65,19 @@ interface NavigationStrings {
 interface DashboardStrings {
     val title: String
     val bridgeRunning: String
+    val bridgePaused: String
     val bridgeIdle: String
     val noFtmsEquipmentSelected: String
     val noGarminWatchSelected: String
     val grantBluetoothPermissions: String
     val sectionStatus: String
     val sectionLiveMetrics: String
+    val sectionLiveCharts: String
     val sectionLastSession: String
     val noPreviousSession: String
+    val viewMetrics: String
+    val viewCharts: String
+    val noLiveGraphSamples: String
     val bluetoothReady: String
     val bluetoothOff: String
     val ftmsConnected: String
@@ -78,6 +94,7 @@ interface DashboardStrings {
     val machineBike: String
     val machineTreadmill: String
     val machineCrossTrainer: String
+    fun chartSummary(title: String, latest: String, min: String, max: String, start: String, end: String): String
 }
 
 interface DevicesStrings {
@@ -120,6 +137,8 @@ interface HistoryStrings {
     val chartHeartRate: String
     val chartCadenceStep: String
     val chartResistance: String
+    val viewMetrics: String
+    val viewCharts: String
     fun savedSessions(count: Int): String
 }
 
@@ -144,19 +163,44 @@ interface LogsStrings {
 interface SettingsStrings {
     val title: String
     val bridgeBehavior: String
-    val sendToAllGarminVariants: String
-    val sendToAllGarminVariantsSubtitle: String
+    val bridgeBehaviorSubtitle: String
+    val dashboard: String
+    val dashboardSubtitle: String
+    val dashboardMetrics: String
+    val dashboardMetricsSubtitle: String
+    val dashboardGraphs: String
+    val dashboardGraphsSubtitle: String
+    val dashboardChartTimespan: String
+    val chartTimespanFullSession: String
+    val keepOneDashboardOptionSelected: String
+    val notificationShortcut: String
+    val notificationShortcutSubtitle: String
+    val heartRateSource: String
+    val heartRateSourceGarmin: String
+    val heartRateSourceMachine: String
+    val powerEstimate: String
+    val powerEstimateSubtitle: String
+    val powerSource: String
+    val powerSourceFtmsPreferred: String
+    val powerSourceCalculated: String
+    val powerBodyMassKg: String
+    val powerFlatCost: String
+    val powerFlatCostHint: String
+    val powerInvalidSettings: String
     val autoReconnect: String
     val autoReconnectSubtitle: String
     val timing: String
+    val timingSubtitle: String
     val packetTimeout: String
     val sendInterval: String
     val maxLogEntries: String
     val debug: String
+    val debugSubtitle: String
     val debugLogging: String
     val debugLoggingEnabledSubtitle: String
     val debugLoggingDisabledSubtitle: String
     val rememberedDevices: String
+    val rememberedDevicesSubtitle: String
     val ftmsEquipment: String
     val garminWatch: String
     val clearRememberedSelections: String
@@ -164,13 +208,29 @@ interface SettingsStrings {
     val clearRememberedDevicesTitle: String
     val clearRememberedDevicesText: String
     val language: String
+    val languageSubtitle: String
     val languageSystemDefault: String
+    val appVersion: String
+    val openSource: String
+    val openSourceSubtitle: String
+    val openSourceLibraries: String
+    val thirdPartySdk: String
+    val libraryVersion: String
+    val license: String
+    val projectWebsite: String
+    val garminSdkNote: String
+    fun appVersionValue(version: String): String
+    fun chartTimespanMinutes(minutes: Int): String
 }
 
 interface NotificationStrings {
     val channel: String
     val title: String
     val text: String
+    val pausedText: String
+    val openAppAction: String
+    val pauseAction: String
+    val resumeAction: String
     val stopAction: String
     val shareDebugLogSubject: String
     val shareDebugLogChooser: String
