@@ -1,0 +1,16 @@
+<settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <setting propertyKey="@Properties.PrimaryMetric" title="@Strings.PrimaryMetricTitle">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.PrimaryMetricAscent</listEntry>
+            <listEntry value="1">@Strings.PrimaryMetricSpeed</listEntry>
+            <listEntry value="2">@Strings.PrimaryMetricDistance</listEntry>
+            <listEntry value="3">@Strings.PrimaryMetricPower</listEntry>
+            <listEntry value="4">@Strings.PrimaryMetricCadence</listEntry>
+            <listEntry value="5">@Strings.PrimaryMetricIncline</listEntry>
+            <listEntry value="6">@Strings.PrimaryMetricHeartRate</listEntry>
+            <listEntry value="7">@Strings.PrimaryMetricElapsed</listEntry>
+            <listEntry value="8">@Strings.PrimaryMetricResistance</listEntry>
+        </settingConfig>
+    </setting>
+</settings>

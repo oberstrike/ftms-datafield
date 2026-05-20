@@ -4,7 +4,7 @@ class AscentTracker {
     var _lastInclinePct = null;
 
     var totalAscentM = 0.0;
-    var source = 0; // 0 none, 1 FTMS, 2 calculated distance*incline
+    var source = 0; // 0 none, 1 FTMS, 2 calculated distance*incline, 3 phone bridge
 
     function reset() {
         _baseFtmsPositiveM = null;

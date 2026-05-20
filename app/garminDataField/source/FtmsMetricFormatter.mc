@@ -1,16 +1,16 @@
 module FtmsMetricFormatter {
 
-    function primary(sample, ascentM) {
-        var value = valueForMetric(sample, ascentM, FtmsVariant.PRIMARY_METRIC);
+    function primary(sample, ascentM, metric) {
+        var value = valueForMetric(sample, ascentM, metric);
         if (value == null) {
             return "--";
         }
 
-        if (FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_ELAPSED) {
+        if (metric == FtmsVariant.METRIC_ELAPSED) {
             return formatElapsed(value);
         }
 
-        if (FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_DISTANCE) {
+        if (metric == FtmsVariant.METRIC_DISTANCE) {
             if (value >= 1000.0) {
                 return (value / 1000.0).format("%.2f");
             }
@@ -18,7 +18,7 @@ module FtmsMetricFormatter {
             return value.format("%.0f");
         }
 
-        if (FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_ASCENT) {
+        if (metric == FtmsVariant.METRIC_ASCENT) {
             if (value < 10.0) {
                 return value.format("%.1f");
             }
@@ -26,13 +26,13 @@ module FtmsMetricFormatter {
             return value.format("%.0f");
         }
 
-        if (FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_SPEED) {
+        if (metric == FtmsVariant.METRIC_SPEED) {
             return value.format("%.1f");
         }
 
-        if (FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_INCLINE
-            || FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_RESISTANCE
-            || FtmsVariant.PRIMARY_METRIC == FtmsVariant.METRIC_CADENCE) {
+        if (metric == FtmsVariant.METRIC_INCLINE
+            || metric == FtmsVariant.METRIC_RESISTANCE
+            || metric == FtmsVariant.METRIC_CADENCE) {
             return value.format("%.1f");
         }
 

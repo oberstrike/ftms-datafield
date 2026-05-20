@@ -19,7 +19,7 @@ Version 1.0.0 stellt die Android-Bridge als debug-signierte APK bereit:
 - [SHA256SUMS.txt](https://github.com/oberstrike/ftms-datafield/releases/download/v1.0.0/SHA256SUMS.txt)
 - [Release-Seite](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.0.0)
 
-Wichtig: v1.0.0 veröffentlicht nur die Android-APK. Garmin-Uhr-Artefakte werden noch nicht als Download veröffentlicht; das Connect-IQ-Datenfeld kann aus dem Quellcode gebaut und sideloaded werden.
+Wichtig: v1.0.0 veröffentlicht aktuell die Android-APK. Das Garmin-Connect-IQ-Datenfeld wird für die Connect-IQ-Store-Prüfung vorbereitet; bis zur Freigabe kann es aus dem Quellcode gebaut und sideloaded werden.
 
 ## Android-App installieren
 
@@ -78,6 +78,7 @@ Das Connect-IQ-Projekt schreibt eigene FIT Developer Fields, zum Beispiel:
 - `0`: keine Quelle
 - `1`: direktes FTMS Positive Elevation Gain Feld
 - `2`: berechnet aus Distanzdelta mal positiver Steigung
+- `3`: Höhenmeter von der Android-Bridge
 
 Das Datenfeld überschreibt nicht Garmins native Distanz, Geschwindigkeit, Power oder Höhenmeter. Garmin Connect zeigt diese Werte je nach Gerät und Garmin-Connect-Unterstützung als Connect-IQ-Felder oder Charts.
 
@@ -149,19 +150,27 @@ Installiere das Garmin Connect IQ SDK und setze deinen Developer Key:
 export GARMIN_DEVELOPER_KEY="$HOME/garmin-dev/ciq.key"
 ```
 
-Alle Forerunner-970-Varianten bauen:
+Forerunner-970-Datenfeld bauen:
 
 ```bash
-DEVICE=fr970 VARIANT=all ./app/garminDataField/scripts/build.sh
+DEVICE=fr970 ./app/garminDataField/scripts/build.sh
 ```
+
+Connect-IQ-Store-Paket exportieren:
+
+```bash
+./app/garminDataField/scripts/export-iq.sh
+```
+
+Store-Listing-Texte und die Einreichungs-Checkliste stehen in [docs/connect-iq-store-listing.md](docs/connect-iq-store-listing.md).
 
 Build-Ausgabe:
 
 ```text
-app/garminDataField/build/outputs/*.prg
+app/garminDataField/build/outputs/FtmsBridgeField-fr970.prg
 ```
 
-Kopiere die `.prg`-Dateien auf die Uhr:
+Kopiere die `.prg`-Datei auf die Uhr:
 
 ```text
 GARMIN/APPS/

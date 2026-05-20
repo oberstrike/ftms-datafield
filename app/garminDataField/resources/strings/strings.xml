@@ -1,34 +1,34 @@
 <strings>
-    <string id="AppName">FTMS Höhenmeter</string>
+    <string id="AppName">FTMS Bridge Field</string>
 
-    <string id="HmChartTitle">Höhenmeter</string>
-    <string id="HmLabel">Höhenmeter gelaufen</string>
-    <string id="HmSummaryLabel">Höhenmeter gesamt</string>
+    <string id="HmChartTitle">Ascent</string>
+    <string id="HmLabel">FTMS Ascent</string>
+    <string id="HmSummaryLabel">Total Ascent</string>
     <string id="HmUnit">m</string>
-    <string id="HmSourceLabel">HM Quelle</string>
-    <string id="HmSourceUnit">0/1/2</string>
+    <string id="HmSourceLabel">Ascent Source</string>
+    <string id="HmSourceUnit">0/1/2/3</string>
 
     <string id="PowerChartTitle">FTMS Power</string>
     <string id="PowerLabel">FTMS Power</string>
     <string id="PowerUnit">W</string>
 
-    <string id="SpeedChartTitle">FTMS Geschwindigkeit</string>
-    <string id="SpeedLabel">FTMS Geschwindigkeit</string>
+    <string id="SpeedChartTitle">FTMS Speed</string>
+    <string id="SpeedLabel">FTMS Speed</string>
     <string id="SpeedUnit">km/h</string>
 
-    <string id="DistanceChartTitle">FTMS Distanz</string>
-    <string id="DistanceLabel">FTMS Distanz</string>
+    <string id="DistanceChartTitle">FTMS Distance</string>
+    <string id="DistanceLabel">FTMS Distance</string>
     <string id="DistanceUnit">m</string>
 
-    <string id="CadStepChartTitle">FTMS Kadenz / Step Rate</string>
-    <string id="CadStepLabel">FTMS Kadenz/Step</string>
+    <string id="CadStepChartTitle">FTMS Cadence / Step Rate</string>
+    <string id="CadStepLabel">FTMS Cadence/Step</string>
     <string id="CadStepUnit">rpm/spm</string>
 
-    <string id="InclineChartTitle">FTMS Steigung</string>
-    <string id="InclineLabel">FTMS Steigung</string>
+    <string id="InclineChartTitle">FTMS Incline</string>
+    <string id="InclineLabel">FTMS Incline</string>
     <string id="InclineUnit">%</string>
 
-    <string id="MachineLabel">FTMS Gerätetyp</string>
+    <string id="MachineLabel">FTMS Machine Type</string>
     <string id="MachineUnit">1/2/3</string>
 
     <string id="HeartRateChartTitle">FTMS Heart Rate</string>
@@ -42,4 +42,15 @@
     <string id="ResistanceChartTitle">FTMS Resistance</string>
     <string id="ResistanceLabel">FTMS Resistance</string>
     <string id="ResistanceUnit">level</string>
+
+    <string id="PrimaryMetricTitle">Primary Watch Metric</string>
+    <string id="PrimaryMetricAscent">Ascent</string>
+    <string id="PrimaryMetricSpeed">Speed</string>
+    <string id="PrimaryMetricDistance">Distance</string>
+    <string id="PrimaryMetricPower">Power</string>
+    <string id="PrimaryMetricCadence">Cadence / Step Rate</string>
+    <string id="PrimaryMetricIncline">Incline</string>
+    <string id="PrimaryMetricHeartRate">Heart Rate</string>
+    <string id="PrimaryMetricElapsed">Elapsed Time</string>
+    <string id="PrimaryMetricResistance">Resistance</string>
 </strings>

@@ -9,7 +9,5 @@ module FtmsVariant {
     const METRIC_ELAPSED = 7;
     const METRIC_RESISTANCE = 8;
 
-    const KEY = "ascent";
-    const LABEL = "FTMS ASC";
-    const PRIMARY_METRIC = METRIC_ASCENT;
+    const DEFAULT_PRIMARY_METRIC = METRIC_ASCENT;
 }

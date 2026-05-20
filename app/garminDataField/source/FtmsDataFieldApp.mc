@@ -1,4 +1,5 @@
 using Toybox.Application as App;
+using Toybox.WatchUi as Ui;
 
 class FtmsDataFieldApp extends App.AppBase {
 
@@ -17,5 +18,12 @@ class FtmsDataFieldApp extends App.AppBase {
         if (_view != null) {
             _view.shutdown();
         }
+    }
+
+    function onSettingsChanged() {
+        if (_view != null) {
+            _view.refreshSettings();
+        }
+        Ui.requestUpdate();
     }
 }

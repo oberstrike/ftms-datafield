@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVICE="${DEVICE:-fr970}"
-VARIANT="${VARIANT:-all}"
 OUT_DIR="$PROJECT_DIR/build/outputs"
+OUT_FILE="$OUT_DIR/FtmsBridgeField-${DEVICE}.prg"
 
 if ! command -v monkeyc >/dev/null 2>&1; then
   echo "ERROR: monkeyc not found. Add the active Garmin Connect IQ SDK bin directory to PATH." >&2
@@ -20,31 +20,18 @@ fi
 
 mkdir -p "$OUT_DIR"
 cd "$PROJECT_DIR"
+rm -f "$OUT_DIR"/FtmsDataField-*-*.prg \
+  "$OUT_DIR"/FtmsDataField-*-*.prg.debug.xml \
+  "$OUT_DIR"/FtmsDataField-*-*-fit_contributions.json \
+  "$OUT_DIR"/FtmsDataField-*-*-settings.json
 
-node tools/garmin-variants.mjs prepare
+echo "Building FTMS Bridge Field for $DEVICE..."
+monkeyc \
+  -f monkey.jungle \
+  -d "$DEVICE" \
+  -y "$GARMIN_DEVELOPER_KEY" \
+  -o "$OUT_FILE" \
+  -w
 
-while IFS='|' read -r VARIANT_KEY VARIANT_LABEL; do
-  if [[ "$VARIANT" != "all" && "$VARIANT" != "$VARIANT_KEY" ]]; then
-    continue
-  fi
-
-  JUNGLE_FILE="$PROJECT_DIR/build/generated/garmin-variants/$VARIANT_KEY/monkey.jungle"
-  OUT_FILE="$OUT_DIR/FtmsDataField-${VARIANT_KEY}-${DEVICE}.prg"
-
-  echo "Building $VARIANT_LABEL ($VARIANT_KEY) for $DEVICE..."
-  monkeyc \
-    -f "$JUNGLE_FILE" \
-    -d "$DEVICE" \
-    -y "$GARMIN_DEVELOPER_KEY" \
-    -o "$OUT_FILE" \
-    -w
-
-  echo "Built: $OUT_FILE"
-done < <(node tools/garmin-variants.mjs list)
-
-if [[ "$VARIANT" != "all" && ! -f "$OUT_DIR/FtmsDataField-${VARIANT}-${DEVICE}.prg" ]]; then
-  echo "ERROR: unknown variant '$VARIANT'" >&2
-  exit 1
-fi
-
+echo "Built: $OUT_FILE"
 echo "For sideloading, copy this .prg to GARMIN/APPS/ on the watch."

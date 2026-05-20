@@ -1,13 +1,12 @@
 param(
-    [string]$Device = $(if ($env:DEVICE) { $env:DEVICE } else { "fr970" }),
-    [string]$Variant = $(if ($env:VARIANT) { $env:VARIANT } else { "ascent" })
+    [string]$Device = $(if ($env:DEVICE) { $env:DEVICE } else { "fr970" })
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent $PSScriptRoot
-$PrgFile = Join-Path $ProjectDir "build\outputs\FtmsDataField-$Variant-$Device.prg"
+$PrgFile = Join-Path $ProjectDir "build\outputs\FtmsBridgeField-$Device.prg"
 
-& "$PSScriptRoot\build.ps1" -Device $Device -Variant $Variant
+& "$PSScriptRoot\build.ps1" -Device $Device
 
 if (-not (Get-Command connectiq -ErrorAction SilentlyContinue)) {
     throw "connectiq not found. Add the active Garmin Connect IQ SDK bin directory to PATH."
