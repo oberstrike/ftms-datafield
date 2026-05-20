@@ -24,10 +24,26 @@ class BridgeForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_PAUSE) {
+            BridgeRuntime.pauseBridge()
+            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
+            return START_STICKY
+        }
+
+        if (intent?.action == ACTION_RESUME) {
+            BridgeRuntime.resumeBridge()
+            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
+            return START_STICKY
+        }
+
         if (intent?.action == ACTION_STOP) {
-            BridgeRuntime.stopBridge()
-            stopSelf()
+            BridgeRuntime.stopBridge { stopSelf() }
             return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_REFRESH) {
+            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
+            return START_STICKY
         }
 
         startForeground(NOTIFICATION_ID, notification())
@@ -49,10 +65,12 @@ class BridgeForegroundService : Service() {
 
     private fun notification(): Notification {
         val strings = notificationStrings()
-        val activityIntent = PendingIntent.getActivity(
+        val openAppIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stopIntent = PendingIntent.getService(
@@ -61,13 +79,41 @@ class BridgeForegroundService : Service() {
             Intent(this, BridgeForegroundService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val pauseIntent = PendingIntent.getService(
+            this,
+            2,
+            Intent(this, BridgeForegroundService::class.java).setAction(ACTION_PAUSE),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val resumeIntent = PendingIntent.getService(
+            this,
+            3,
+            Intent(this, BridgeForegroundService::class.java).setAction(ACTION_RESUME),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val paused = BridgeRuntime.state.value.paused
 
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_bridge)
             .setContentTitle(strings.title)
-            .setContentText(strings.text)
-            .setContentIntent(activityIntent)
+            .setContentText(if (paused) strings.pausedText else strings.text)
+            .setContentIntent(openAppIntent)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
+
+        if (BridgeRuntime.state.value.settings.showOpenAppNotificationAction) {
+            builder.addAction(R.drawable.ic_stat_bridge, strings.openAppAction, openAppIntent)
+        }
+
+        builder.addAction(
+            R.drawable.ic_stat_bridge,
+            if (paused) strings.resumeAction else strings.pauseAction,
+            if (paused) resumeIntent else pauseIntent,
+        )
+
+        return builder
             .addAction(R.drawable.ic_stat_bridge, strings.stopAction, stopIntent)
             .build()
     }
@@ -76,6 +122,9 @@ class BridgeForegroundService : Service() {
 
     companion object {
         const val ACTION_START = "de.ma.ftms.bridge.START"
+        const val ACTION_REFRESH = "de.ma.ftms.bridge.REFRESH"
+        const val ACTION_PAUSE = "de.ma.ftms.bridge.PAUSE"
+        const val ACTION_RESUME = "de.ma.ftms.bridge.RESUME"
         const val ACTION_STOP = "de.ma.ftms.bridge.STOP"
     }
 }
