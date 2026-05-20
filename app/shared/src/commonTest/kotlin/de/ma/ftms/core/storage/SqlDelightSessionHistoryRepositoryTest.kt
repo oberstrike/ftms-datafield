@@ -130,6 +130,39 @@ class SqlDelightSessionHistoryRepositoryTest {
     }
 
     @Test
+    fun recoveryPreservesRunningSessionSamplesAndStats() = runTest {
+        val repository = repository()
+        val session = repository.createSession(1_000L, "FS-BC11B7", "AA:BB", "FR970", 42L)
+        val firstSample = sample(timestamp = 2_000L, distance = 10.0)
+        val secondSample = sample(timestamp = 3_000L, distance = 20.0)
+        repository.appendSample(session.sessionId, session.startedAtMillis, firstSample)
+        repository.appendSample(session.sessionId, session.startedAtMillis, secondSample)
+        repository.updateStats(
+            sessionId = session.sessionId,
+            nowMillis = 3_500L,
+            stats = SessionStatsSnapshot(
+                packetCount = 2,
+                sendSuccessCount = 1,
+                sendFailureCount = 1,
+                lastError = "send failed",
+                latest = secondSample,
+            ),
+        )
+
+        repository.recoverInterruptedSessions(5_000L)
+
+        val recovered = repository.latestSession()
+        assertNotNull(recovered)
+        assertEquals("interrupted", recovered.finalStatus)
+        assertEquals(2, recovered.packetCount)
+        assertEquals(1, recovered.sendSuccessCount)
+        assertEquals(1, recovered.sendFailureCount)
+        assertEquals("send failed", recovered.lastError)
+        assertEquals(20.0, recovered.finalDistanceM)
+        assertEquals(listOf(1_000L, 2_000L), repository.observeSamples(session.sessionId).first().map { it.offsetMillis })
+    }
+
+    @Test
     fun latestSessionIsNullWhenEmpty() = runTest {
         assertNull(repository().latestSession())
     }

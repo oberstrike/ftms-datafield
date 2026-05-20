@@ -24,6 +24,8 @@ import de.ma.ftms.core.RscMeasurementParser
 import de.ma.ftms.core.SmoothedTreadmillSample
 import de.ma.ftms.core.TreadmillSampleSmoother
 import de.ma.ftms.core.storage.SessionHistoryRepository
+import de.ma.ftms.core.storage.WorkoutSessionRecord
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -55,12 +57,14 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
     private var senderJob: Job? = null
     private var reconnectJob: Job? = null
     private var packetWatchdogJob: Job? = null
-    private var stopSaveJob: Job? = null
+    private var historyWriteJob: Job? = null
     private var sessionsObserverJob: Job? = null
     private var samplesObserverJob: Job? = null
     private var logsObserverJob: Job? = null
     private var diagnosticLogsObserverJob: Job? = null
     private var captureStateObserverJob: Job? = null
+    private var activeSessionId: String? = null
+    private var activeSessionCreation: CompletableDeferred<WorkoutSessionRecord?>? = null
     private var activeSessionStartedAtMillis: Long = 0
     private var pausedStartedAtMillis: Long = 0
     private var accumulatedPausedMillis: Long = 0
@@ -80,7 +84,6 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
     private var latestGarminHeartRate: GarminHeartRate? = null
     private var lastGarminHeartRateDiagnosticAtMillis = 0L
     private var sequence = 0
-    private var pendingStoppedSession: PendingStoppedSession? = null
     private val stopCompletionCallbacks = mutableListOf<() -> Unit>()
 
     val state: StateFlow<BridgeUiState> = _state
@@ -119,7 +122,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
             logCapture?.startCapture()
         }
         observeSessions()
-        scope.launch {
+        enqueueHistoryWrite {
             sessionHistory?.recoverInterruptedSessions(System.currentTimeMillis())
             _state.update { state ->
                 state.copy(lastSummary = sessionHistory?.latestSession()?.toLastSessionSummary())
@@ -319,7 +322,9 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
             return
         }
 
-        if (!current.permissionsGranted || current.selectedTreadmillAddress == null || current.selectedGarminId == null) {
+        val treadmillAddress = current.selectedTreadmillAddress
+        val garminId = current.selectedGarminId
+        if (!current.permissionsGranted || treadmillAddress == null || garminId == null) {
             recordError("Select treadmill and Garmin before starting")
             return
         }
@@ -354,11 +359,16 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         pauseBaselineAscentM = 0.0
         lastPersistedSampleAtMillis = 0
         bufferedSessionSamples.clear()
+        val runStartedAtMillis = stats.startedAtMillis
+        activeSessionStartedAtMillis = runStartedAtMillis
+        val sessionCreation = CompletableDeferred<WorkoutSessionRecord?>()
+        activeSessionCreation = sessionCreation
+        activeSessionId = null
         diagnostics?.startRun(
-            startedAtMillis = stats.startedAtMillis,
+            startedAtMillis = runStartedAtMillis,
             sessionId = null,
-            treadmillName = current.selectedTreadmillName ?: current.selectedTreadmillAddress,
-            garminName = current.selectedGarminName ?: current.selectedGarminId.toString(),
+            treadmillName = current.selectedTreadmillName ?: treadmillAddress,
+            garminName = current.selectedGarminName ?: garminId.toString(),
         )
         _state.update {
             it.copy(
@@ -378,10 +388,46 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 latestDiagnosticLogPath = diagnostics?.latestLogPath,
             )
         }
-        activeSessionStartedAtMillis = stats.startedAtMillis
-        treadmillClient?.connect(current.selectedTreadmillAddress)
-        startSender()
-        startPacketWatchdog()
+        enqueueHistoryWrite {
+            val session = runCatching {
+                sessionHistory?.createSession(
+                    startedAtMillis = runStartedAtMillis,
+                    treadmillName = current.selectedTreadmillName,
+                    treadmillAddress = treadmillAddress,
+                    garminName = current.selectedGarminName,
+                    garminId = garminId,
+                )
+            }.onFailure { error ->
+                BridgeLogger.warn(TAG_RUNTIME, "Failed to create running session: ${error.message ?: error::class.simpleName.orEmpty()}")
+                diagnostics?.warn(TAG_RUNTIME, "session_create_failed error=${error.message ?: error::class.simpleName.orEmpty()}")
+            }.getOrNull()
+            sessionCreation.complete(session)
+        }
+        scope.launch {
+            val session = sessionCreation.await()
+            if (activeSessionCreation !== sessionCreation || activeSessionStartedAtMillis != runStartedAtMillis || !_state.value.running) {
+                return@launch
+            }
+            if (session == null) {
+                val message = "Failed to create running session"
+                recordError(message)
+                activeSessionCreation = null
+                activeSessionStartedAtMillis = 0
+                ensureBridgeStoppedUi()
+                stopBridgeForegroundServiceIfIdle()
+                diagnostics?.stopRun("failed")
+                _state.update { it.copy(latestDiagnosticLogPath = diagnostics?.latestLogPath) }
+                return@launch
+            }
+
+            activeSessionCreation = null
+            activeSessionId = session.sessionId
+            activeSessionStartedAtMillis = session.startedAtMillis
+            diagnostics?.attachSession(session.sessionId)
+            treadmillClient?.connect(treadmillAddress)
+            startSender()
+            startPacketWatchdog()
+        }
     }
 
     fun pauseBridge() {
@@ -437,12 +483,8 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         onStopped?.let { stopCompletionCallbacks += it }
 
         if (activeSessionStartedAtMillis <= 0) {
-            if (stopSaveJob?.isActive == true || pendingStoppedSession != null) {
-                savePendingStoppedSession()
-            } else {
-                drainStopCompletionCallbacks()
-            }
             ensureBridgeStoppedUi()
+            completeStopWhenHistoryIdle()
             return
         }
 
@@ -466,6 +508,8 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         latestGarminHeartRate = null
         lastGarminHeartRateDiagnosticAtMillis = 0L
         val startedAtMillis = activeSessionStartedAtMillis
+        val sessionId = activeSessionId
+        val sessionCreation = activeSessionCreation
         val localSummary = stats.finish("stopped")
         val stoppedAtMillis = stats.stoppedAtMillis
         val snapshot = stats.snapshot()
@@ -474,19 +518,10 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         val treadmillAddress = _state.value.selectedTreadmillAddress
         val garminName = _state.value.selectedGarminName
         val garminId = _state.value.selectedGarminId
+        activeSessionCreation = null
+        activeSessionId = null
         activeSessionStartedAtMillis = 0
         bufferedSessionSamples.clear()
-        pendingStoppedSession = PendingStoppedSession(
-            startedAtMillis = startedAtMillis,
-            stoppedAtMillis = stoppedAtMillis,
-            treadmillName = treadmillName,
-            treadmillAddress = treadmillAddress,
-            garminName = garminName,
-            garminId = garminId,
-            stats = snapshot,
-            samples = sessionSamples,
-            localSummary = localSummary,
-        )
         _state.update {
             it.copy(
                 running = false,
@@ -501,7 +536,44 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 lastSummary = localSummary,
             )
         }
-        savePendingStoppedSession()
+        enqueueHistoryWrite {
+            val resolvedSessionId = sessionId ?: sessionCreation?.await()?.sessionId
+            val result = runCatching {
+                val history = sessionHistory ?: error("Session history unavailable")
+                if (resolvedSessionId != null) {
+                    history.finishSession(
+                        sessionId = resolvedSessionId,
+                        stoppedAtMillis = stoppedAtMillis,
+                        finalStatus = "stopped",
+                        stats = snapshot,
+                    )
+                } else {
+                    history.saveFinishedSession(
+                        startedAtMillis = startedAtMillis,
+                        stoppedAtMillis = stoppedAtMillis,
+                        finalStatus = "stopped",
+                        treadmillName = treadmillName,
+                        treadmillAddress = treadmillAddress,
+                        garminName = garminName,
+                        garminId = garminId,
+                        stats = snapshot,
+                        samples = sessionSamples,
+                    )
+                }
+            }
+
+            result.onSuccess { record ->
+                _state.update { it.copy(lastSummary = record?.toLastSessionSummary() ?: localSummary) }
+            }.onFailure { error ->
+                val message = "Failed to finish stopped session: ${error.message ?: error::class.simpleName.orEmpty()}"
+                BridgeLogger.warn(TAG_RUNTIME, message)
+                diagnostics?.warn(TAG_RUNTIME, "session_finish_failed error=${error.message ?: error::class.simpleName.orEmpty()}")
+                _state.update { it.copy(lastError = message, lastSummary = localSummary) }
+            }
+
+            stopBridgeForegroundServiceIfIdle()
+            drainStopCompletionCallbacks()
+        }
         log("Bridge stopped")
         diagnostics?.info(TAG_RUNTIME, "bridge_stopped packets=${stats.packetCount} sendOk=${stats.sendSuccessCount} sendFail=${stats.sendFailureCount}")
         scope.launch {
@@ -913,49 +985,39 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         }
     }
 
-    private fun savePendingStoppedSession() {
-        if (stopSaveJob?.isActive == true) {
-            return
-        }
-
-        val pending = pendingStoppedSession
-        if (pending == null) {
-            appContext?.stopService(Intent(appContext, BridgeForegroundService::class.java))
-            drainStopCompletionCallbacks()
-            return
-        }
-
-        stopSaveJob = scope.launch {
-            val result = runCatching {
-                val history = sessionHistory ?: error("Session history unavailable")
-                history.saveFinishedSession(
-                    startedAtMillis = pending.startedAtMillis,
-                    stoppedAtMillis = pending.stoppedAtMillis,
-                    finalStatus = "stopped",
-                    treadmillName = pending.treadmillName,
-                    treadmillAddress = pending.treadmillAddress,
-                    garminName = pending.garminName,
-                    garminId = pending.garminId,
-                    stats = pending.stats,
-                    samples = pending.samples,
-                )
-            }
-
-            result.onSuccess { record ->
-                if (pendingStoppedSession === pending) {
-                    pendingStoppedSession = null
+    private fun enqueueHistoryWrite(block: suspend () -> Unit): Job {
+        val previous = historyWriteJob
+        lateinit var job: Job
+        job = scope.launch {
+            previous?.join()
+            try {
+                block()
+            } finally {
+                if (historyWriteJob === job) {
+                    historyWriteJob = null
                 }
-                _state.update { it.copy(lastSummary = record.toLastSessionSummary()) }
-            }.onFailure { error ->
-                val message = "Failed to save stopped session: ${error.message ?: error::class.simpleName.orEmpty()}"
-                BridgeLogger.warn(TAG_RUNTIME, message)
-                diagnostics?.warn(TAG_RUNTIME, "session_save_failed error=${error.message ?: error::class.simpleName.orEmpty()}")
-                _state.update { it.copy(lastError = message, lastSummary = pending.localSummary) }
             }
+        }
+        historyWriteJob = job
+        return job
+    }
 
-            appContext?.stopService(Intent(appContext, BridgeForegroundService::class.java))
+    private fun completeStopWhenHistoryIdle() {
+        if (historyWriteJob?.isActive == true) {
+            enqueueHistoryWrite {
+                stopBridgeForegroundServiceIfIdle()
+                drainStopCompletionCallbacks()
+            }
+        } else {
+            stopBridgeForegroundServiceIfIdle()
             drainStopCompletionCallbacks()
-            stopSaveJob = null
+        }
+    }
+
+    private fun stopBridgeForegroundServiceIfIdle() {
+        val context = appContext ?: return
+        if (shouldStopBridgeForegroundService(_state.value.running, activeSessionStartedAtMillis)) {
+            context.stopService(Intent(context, BridgeForegroundService::class.java))
         }
     }
 
@@ -1001,6 +1063,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         val timestamp = sample.raw.timestampMillis ?: System.currentTimeMillis()
         if (timestamp - lastPersistedSampleAtMillis < 1_000L) {
             diagnostics?.debug(TAG_RUNTIME, "sample_buffer skipped=throttle timestamp=$timestamp last=$lastPersistedSampleAtMillis")
+            persistSessionStats()
             return
         }
 
@@ -1010,7 +1073,41 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
             TAG_RUNTIME,
             "sample_buffer offsetMs=${(timestamp - startedAt).coerceAtLeast(0L)} dist=${sample.distanceM} ascent=${sample.ascentM}",
         )
+        persistSessionSample(sample, startedAt)
         _state.update { it.copy(liveDashboardSamples = bufferedSessionSamples.toList()) }
+    }
+
+    private fun persistSessionSample(sample: SmoothedTreadmillSample, startedAtMillis: Long) {
+        val sessionId = activeSessionId ?: return
+        val snapshot = stats.snapshot()
+        val updatedAtMillis = System.currentTimeMillis()
+        enqueueHistoryWrite {
+            val result = runCatching {
+                val history = sessionHistory ?: error("Session history unavailable")
+                history.appendSample(sessionId, startedAtMillis, sample)
+                history.updateStats(sessionId, updatedAtMillis, snapshot)
+            }
+            result.onFailure { error ->
+                BridgeLogger.warn(TAG_RUNTIME, "Failed to persist sample: ${error.message ?: error::class.simpleName.orEmpty()}")
+                diagnostics?.warn(TAG_RUNTIME, "sample_persist_failed error=${error.message ?: error::class.simpleName.orEmpty()}")
+            }
+        }
+    }
+
+    private fun persistSessionStats() {
+        val sessionId = activeSessionId ?: return
+        val snapshot = stats.snapshot()
+        val updatedAtMillis = System.currentTimeMillis()
+        enqueueHistoryWrite {
+            val result = runCatching {
+                val history = sessionHistory ?: error("Session history unavailable")
+                history.updateStats(sessionId, updatedAtMillis, snapshot)
+            }
+            result.onFailure { error ->
+                BridgeLogger.warn(TAG_RUNTIME, "Failed to persist stats: ${error.message ?: error::class.simpleName.orEmpty()}")
+                diagnostics?.warn(TAG_RUNTIME, "stats_persist_failed error=${error.message ?: error::class.simpleName.orEmpty()}")
+            }
+        }
     }
 
     private fun SmoothedTreadmillSample.adjustForActiveSession(): SmoothedTreadmillSample {
@@ -1105,19 +1202,10 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
     private const val DIAGNOSTIC_PACKET_INTERVAL = 5
     private const val DIAGNOSTIC_DISTANCE_JUMP_M = 5.0
     private const val DIAGNOSTIC_STOP_GRACE_MS = 2_500L
-
-    private data class PendingStoppedSession(
-        val startedAtMillis: Long,
-        val stoppedAtMillis: Long,
-        val treadmillName: String?,
-        val treadmillAddress: String?,
-        val garminName: String?,
-        val garminId: Long?,
-        val stats: de.ma.ftms.core.storage.SessionStatsSnapshot,
-        val samples: List<SmoothedTreadmillSample>,
-        val localSummary: LastSessionSummary,
-    )
 }
+
+internal fun shouldStopBridgeForegroundService(running: Boolean, activeSessionStartedAtMillis: Long): Boolean =
+    !running && activeSessionStartedAtMillis <= 0
 
 internal data class GarminHeartRate(
     val bpm: Int,
