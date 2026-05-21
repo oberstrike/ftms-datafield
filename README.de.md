@@ -184,13 +184,10 @@ Weitere Hinweise zu IntelliJ und dem Garmin SDK stehen in [INTELLIJ.md](INTELLIJ
 app/androidApp/       Android-Bridge-App
 app/garminDataField/  Garmin-Connect-IQ-Datenfeld
 app/shared/           Kotlin-Multiplatform-FTMS-Parser, Glättung, Storage-Modelle
-docs/                 Design- und Validierungsnotizen
+docs/                 Connect-IQ-Store-Unterlagen und Assets
 tools/ftmsProbe/      Linux-FTMS-Validierungsprobe
 ```
 
 Nützliche technische Referenzen:
 
-- [Android bridge design](docs/android-bridge-design.md)
-- [FTMS validation guide](docs/ftms-validation.md)
-- [FS-BC11B7 validation result](docs/ftms-validation-result.md)
 - [Changelog](CHANGELOG.md)
