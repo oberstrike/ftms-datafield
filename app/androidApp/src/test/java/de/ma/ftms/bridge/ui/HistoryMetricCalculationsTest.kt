@@ -2,6 +2,7 @@ package de.ma.ftms.bridge.ui
 
 import de.ma.ftms.core.DistanceSource
 import de.ma.ftms.core.storage.SessionSampleRecord
+import de.ma.ftms.core.storage.WorkoutSessionRecord
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -45,6 +46,73 @@ class HistoryMetricCalculationsTest {
         assertNull(averageResistance(samples))
     }
 
+    @Test
+    fun allTimeTotalsAreZeroForEmptyHistory() {
+        val totals = allTimeHistoryTotals(emptyList())
+
+        assertEquals(0, totals.sessionCount)
+        assertEquals(0.0, totals.totalDistanceM)
+        assertEquals(0.0, totals.totalAscentM)
+        assertEquals(0L, totals.totalDurationMillis)
+    }
+
+    @Test
+    fun allTimeTotalsSumStoppedSessions() {
+        val totals = allTimeHistoryTotals(
+            listOf(
+                session(
+                    sessionId = "first",
+                    startedAtMillis = 1_000L,
+                    stoppedAtMillis = 61_000L,
+                    finalDistanceM = 1_200.0,
+                    finalAscentM = 24.0,
+                ),
+                session(
+                    sessionId = "second",
+                    startedAtMillis = 100_000L,
+                    stoppedAtMillis = 250_000L,
+                    finalDistanceM = 3_400.0,
+                    finalAscentM = 51.0,
+                ),
+            ),
+        )
+
+        assertEquals(2, totals.sessionCount)
+        assertEquals(4_600.0, totals.totalDistanceM)
+        assertEquals(75.0, totals.totalAscentM)
+        assertEquals(210_000L, totals.totalDurationMillis)
+    }
+
+    @Test
+    fun allTimeTotalsIncludeInterruptedAndRunningSessions() {
+        val totals = allTimeHistoryTotals(
+            listOf(
+                session(
+                    sessionId = "interrupted",
+                    finalStatus = "interrupted",
+                    startedAtMillis = 1_000L,
+                    stoppedAtMillis = 31_000L,
+                    finalDistanceM = 500.0,
+                    finalAscentM = 5.0,
+                ),
+                session(
+                    sessionId = "running",
+                    finalStatus = "running",
+                    startedAtMillis = 40_000L,
+                    stoppedAtMillis = null,
+                    updatedAtMillis = 100_000L,
+                    finalDistanceM = 800.0,
+                    finalAscentM = 9.0,
+                ),
+            ),
+        )
+
+        assertEquals(2, totals.sessionCount)
+        assertEquals(1_300.0, totals.totalDistanceM)
+        assertEquals(14.0, totals.totalAscentM)
+        assertEquals(90_000L, totals.totalDurationMillis)
+    }
+
     private fun sample(
         powerW: Int? = null,
         heartRateBpm: Int? = null,
@@ -74,5 +142,33 @@ class HistoryMetricCalculationsTest {
             remainingS = null,
             parseError = null,
             distanceSource = DistanceSource.NONE,
+        )
+
+    private fun session(
+        sessionId: String,
+        finalStatus: String = "stopped",
+        startedAtMillis: Long,
+        stoppedAtMillis: Long?,
+        updatedAtMillis: Long = stoppedAtMillis ?: startedAtMillis,
+        finalDistanceM: Double,
+        finalAscentM: Double,
+    ): WorkoutSessionRecord =
+        WorkoutSessionRecord(
+            sessionId = sessionId,
+            startedAtMillis = startedAtMillis,
+            stoppedAtMillis = stoppedAtMillis,
+            finalStatus = finalStatus,
+            treadmillName = null,
+            treadmillAddress = null,
+            garminName = null,
+            garminId = null,
+            packetCount = 0,
+            sendSuccessCount = 0,
+            sendFailureCount = 0,
+            lastError = "",
+            finalDistanceM = finalDistanceM,
+            finalAscentM = finalAscentM,
+            finalSpeedKmh = 0.0,
+            updatedAtMillis = updatedAtMillis,
         )
 }

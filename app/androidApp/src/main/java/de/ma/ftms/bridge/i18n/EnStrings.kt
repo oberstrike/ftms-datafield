@@ -123,6 +123,8 @@ private object EnDevicesStrings : DevicesStrings {
 
 private object EnHistoryStrings : HistoryStrings {
     override val title = "History"
+    override val allTime = "All time"
+    override val totalSessions = "Sessions"
     override val storedSessions = "Stored sessions"
     override val noSessionsStored = "No sessions stored yet"
     override val clearHistoryTitle = "Clear history?"

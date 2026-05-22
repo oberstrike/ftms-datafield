@@ -123,6 +123,8 @@ private object DeDevicesStrings : DevicesStrings {
 
 private object DeHistoryStrings : HistoryStrings {
     override val title = "Verlauf"
+    override val allTime = "Gesamt"
+    override val totalSessions = "Sessions"
     override val storedSessions = "Gespeicherte Sessions"
     override val noSessionsStored = "Noch keine Sessions gespeichert"
     override val clearHistoryTitle = "Verlauf löschen?"

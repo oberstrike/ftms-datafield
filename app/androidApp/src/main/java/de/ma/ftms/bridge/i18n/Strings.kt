@@ -122,6 +122,8 @@ interface DevicesStrings {
 
 interface HistoryStrings {
     val title: String
+    val allTime: String
+    val totalSessions: String
     val storedSessions: String
     val noSessionsStored: String
     val clearHistoryTitle: String

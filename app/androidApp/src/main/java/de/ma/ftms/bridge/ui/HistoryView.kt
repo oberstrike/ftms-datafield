@@ -71,6 +71,10 @@ private fun HistoryList(
 ) {
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
 
+    if (sessions.isNotEmpty()) {
+        AllTimeSummary(strings = strings, totals = allTimeHistoryTotals(sessions))
+    }
+
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(modifier = Modifier.weight(1f)) {
             Text(strings.history.storedSessions, fontWeight = FontWeight.Bold)
@@ -109,6 +113,20 @@ private fun HistoryList(
             },
             onDismiss = { showClearConfirm = false },
         )
+    }
+}
+
+@Composable
+private fun AllTimeSummary(strings: Strings, totals: AllTimeHistoryTotals) {
+    Section(strings.history.allTime) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricTile(strings.history.totalSessions, totals.sessionCount.toString(), Modifier.weight(1f))
+            MetricTile(strings.common.distance, "%.2f km".format(totals.totalDistanceM / 1000.0), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricTile(strings.common.ascent, "%.1f m".format(totals.totalAscentM), Modifier.weight(1f))
+            MetricTile(strings.common.duration, formatDuration(totals.totalDurationMillis), Modifier.weight(1f))
+        }
     }
 }
 
@@ -274,6 +292,13 @@ private fun MetricGrid(metrics: List<HistoryMetricTile>) {
 private data class HistoryMetricTile(
     val label: String,
     val value: String,
+)
+
+internal data class AllTimeHistoryTotals(
+    val sessionCount: Int = 0,
+    val totalDistanceM: Double = 0.0,
+    val totalAscentM: Double = 0.0,
+    val totalDurationMillis: Long = 0L,
 )
 
 private enum class HistoryPage {
@@ -512,6 +537,16 @@ internal fun averageCadenceOrStep(samples: List<SessionSampleRecord>): Double? =
 
 internal fun averageResistance(samples: List<SessionSampleRecord>): Double? =
     samples.averageOfNonNull { resistance }
+
+internal fun allTimeHistoryTotals(sessions: List<WorkoutSessionRecord>): AllTimeHistoryTotals =
+    sessions.fold(AllTimeHistoryTotals()) { totals, session ->
+        totals.copy(
+            sessionCount = totals.sessionCount + 1,
+            totalDistanceM = totals.totalDistanceM + session.finalDistanceM.coerceAtLeast(0.0),
+            totalAscentM = totals.totalAscentM + session.finalAscentM.coerceAtLeast(0.0),
+            totalDurationMillis = totals.totalDurationMillis + session.durationMillis,
+        )
+    }
 
 private fun List<SessionSampleRecord>.averageOfNonNull(value: SessionSampleRecord.() -> Double?): Double? {
     val values = mapNotNull { it.value() }
