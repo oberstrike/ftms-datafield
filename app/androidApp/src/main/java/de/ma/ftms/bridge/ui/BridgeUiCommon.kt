@@ -33,8 +33,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.ma.ftms.bridge.i18n.LocalStrings
+import de.ma.ftms.bridge.runtime.FootPodStatus
+import de.ma.ftms.bridge.runtime.isFootPodMode
+import de.ma.ftms.bridge.runtime.isWatchReadyForStart
 import de.ma.ftms.bridge.i18n.Strings
 import de.ma.ftms.bridge.runtime.BridgeUiState
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.ValueSource
+import de.ma.ftms.core.SensorReadings
+import kotlin.math.roundToInt
+import de.ma.ftms.bridge.runtime.GarminConnectProblem
 import de.ma.ftms.core.FtmsMachineKind
 
 @Composable
@@ -294,10 +303,58 @@ fun startBlockReason(state: BridgeUiState, strings: Strings): String? =
         !state.permissionsGranted -> strings.dashboard.startBlockBluetoothPermissions
         !state.bleAvailable -> strings.dashboard.startBlockBluetoothUnavailable
         state.selectedTreadmillAddress == null -> strings.dashboard.startBlockSelectFtms
+        state.garminConnectProblem != null -> garminConnectProblemText(state.garminConnectProblem, strings)
         state.selectedGarminId == null -> strings.dashboard.startBlockSelectGarmin
-        !state.garminReady -> strings.dashboard.startBlockGarminApp
+        !isWatchReadyForStart(state) -> strings.dashboard.startBlockGarminApp
         else -> null
     }
+
+fun garminConnectProblemText(problem: GarminConnectProblem, strings: Strings): String =
+    when (problem) {
+        GarminConnectProblem.NOT_INSTALLED -> strings.devices.garminConnectNotInstalled
+        GarminConnectProblem.UPGRADE_NEEDED -> strings.devices.garminConnectUpgradeNeeded
+        GarminConnectProblem.SERVICE_ERROR -> strings.devices.garminConnectServiceError
+    }
+
+fun valueSourceLabel(source: ValueSource, strings: Strings): String =
+    when (source) {
+        ValueSource.EQUIPMENT -> strings.common.sourceEquipment
+        ValueSource.WATCH -> strings.common.sourceWatch
+    }
+
+fun sourcedMetricLabel(metric: SourcedMetric, strings: Strings): String =
+    when (metric) {
+        SourcedMetric.HEART_RATE -> strings.common.heartRate
+        SourcedMetric.POWER -> strings.common.power
+        SourcedMetric.CADENCE -> strings.common.cadenceStep
+    }
+
+/** What the running sensor for the watch is doing, for the status card. */
+internal fun footPodStatusLabel(state: BridgeUiState, strings: Strings): String =
+    when (state.footPodStatus) {
+        FootPodStatus.OFF ->
+            if (state.selectedEquipmentType == EquipmentType.TREADMILL) {
+                strings.dashboard.footPodOff
+            } else {
+                strings.dashboard.footPodTreadmillOnly
+            }
+        FootPodStatus.UNSUPPORTED -> strings.dashboard.footPodUnsupported
+        FootPodStatus.PERMISSION_MISSING -> strings.dashboard.footPodPermissionMissing
+        FootPodStatus.ADVERTISING -> strings.dashboard.footPodAdvertising
+        FootPodStatus.CONNECTED -> strings.dashboard.footPodConnected
+        FootPodStatus.FAILED -> strings.dashboard.footPodFailed
+    }
+
+/** One source's value of [metric] as shown to the user, or null if the source has none. */
+internal fun formatSourceValue(metric: SourcedMetric, readings: SensorReadings?, type: EquipmentType): String? =
+    when (metric) {
+        SourcedMetric.HEART_RATE -> readings?.heartRateBpm?.let { "$it bpm" }
+        SourcedMetric.POWER -> readings?.powerW?.let { "$it W" }
+        SourcedMetric.CADENCE -> readings?.cadenceRpm?.let { "${it.roundToInt()} ${if (type.showsPace) "spm" else "rpm"}" }
+    }
+
+fun equipmentTypeLabel(type: EquipmentType, strings: Strings): String =
+    machineLabel(type.machineKind, strings)
 
 fun machineLabel(kind: Int, strings: Strings): String =
     when (kind) {

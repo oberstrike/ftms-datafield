@@ -4,6 +4,9 @@ using Toybox.System as Sys;
 
 class FtmsPhoneBridgeReceiver {
 
+    // Sequence number of the newest message handled; -1 when none is known.
+    var _lastSeq = -1;
+
     function initialize() {
     }
 
@@ -27,9 +30,36 @@ class FtmsPhoneBridgeReceiver {
         var type = data["type"];
         var kind = numberValue(data, "kind", 0);
 
+        var seq = numberValue(data, "seq", -1);
+
         if (version == 2 && type != null && type.equals("ftms_stop")) {
+            _lastSeq = -1;
             FtmsState.stopPhoneBridge();
-            Sys.println("FTMS phone stop seq=" + numberValue(data, "seq", -1));
+            Sys.println("FTMS phone stop seq=" + seq);
+            return;
+        }
+
+        if (isOutdated(seq)) {
+            Sys.println("FTMS phone ignored outdated seq=" + seq + " last=" + _lastSeq);
+            return;
+        }
+
+        if (version == 2 && type != null && type.equals("ftms_pause")) {
+            rememberSeq(seq);
+            FtmsState.pausePhoneBridge();
+            return;
+        }
+
+        if (version == 2 && type != null && type.equals("ftms_wait")) {
+            rememberSeq(seq);
+            FtmsState.waitForPhoneBridge();
+            return;
+        }
+
+        if (version == 2 && type != null && type.equals("ftms_resume")) {
+            rememberSeq(seq);
+            FtmsState.resumePhoneBridge();
+            Sys.println("FTMS phone resume seq=" + seq);
             return;
         }
 
@@ -37,6 +67,8 @@ class FtmsPhoneBridgeReceiver {
             Sys.println("FTMS phone ignored protocol");
             return;
         }
+
+        rememberSeq(seq);
 
         var sample = new FtmsSample(kind);
         sample.timestampMs = Sys.getTimer();
@@ -89,13 +121,29 @@ class FtmsPhoneBridgeReceiver {
         }
 
         FtmsState.updatePhoneBridge(sample);
-        Sys.println("FTMS phone rx seq=" + numberValue(data, "seq", -1)
+        Sys.println("FTMS phone rx seq=" + seq
             + " kind=" + kind
             + " speed=" + sample.speedKmh
             + " dist=" + sample.distanceM
             + " ascent=" + sample.bridgeAscentM
             + " cadStep=" + sample.cadenceOrStepRate()
             + " elapsed=" + sample.elapsedS);
+    }
+
+    // A message is outdated when it carries a sequence number that is not newer than the last
+    // one handled, i.e. it was delivered late or twice. This is only judged while the bridge is
+    // fresh: after a silence the phone app may have restarted and begun counting from 1 again.
+    function isOutdated(seq as Lang.Number) as Lang.Boolean {
+        return seq >= 0
+            && _lastSeq >= 0
+            && seq <= _lastSeq
+            && FtmsState.hasFreshPhoneBridge(5000);
+    }
+
+    function rememberSeq(seq as Lang.Number) as Void {
+        if (seq >= 0) {
+            _lastSeq = seq;
+        }
     }
 
     function isSupportedKind(kind as Lang.Number) as Lang.Boolean {

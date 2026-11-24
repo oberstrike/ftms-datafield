@@ -59,8 +59,9 @@ class SessionStats(
         lastError = message
     }
 
-    fun finish(finalStatus: String): LastSessionSummary {
-        stoppedAtMillis = nowMillis()
+    /** Ends the statistics now, or as of [endedAtMillis] if the session was over before now. */
+    fun finish(finalStatus: String, endedAtMillis: Long? = null): LastSessionSummary {
+        stoppedAtMillis = (endedAtMillis ?: nowMillis()).coerceAtLeast(startedAtMillis)
         val finalSample = latest
         return LastSessionSummary(
             startedAtMillis = startedAtMillis,

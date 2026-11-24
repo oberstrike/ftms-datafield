@@ -1,6 +1,7 @@
 package de.ma.ftms.core.storage
 
 import de.ma.ftms.core.DistanceSource
+import de.ma.ftms.core.SensorReadings
 import de.ma.ftms.core.SmoothedFtmsSample
 
 data class WorkoutSessionRecord(
@@ -20,6 +21,8 @@ data class WorkoutSessionRecord(
     val finalAscentM: Double,
     val finalSpeedKmh: Double,
     val updatedAtMillis: Long,
+    /** Equipment type selected for the session, as a [de.ma.ftms.core.FtmsMachineKind] value. */
+    val equipmentKind: Int = de.ma.ftms.core.FtmsMachineKind.TREADMILL,
 ) {
     val durationMillis: Long
         get() = ((stoppedAtMillis ?: updatedAtMillis) - startedAtMillis).coerceAtLeast(0L)
@@ -47,6 +50,9 @@ data class SessionSampleRecord(
     val remainingS: Int?,
     val parseError: String?,
     val distanceSource: DistanceSource,
+    /** What the equipment and the watch each reported; null for samples stored without them. */
+    val equipment: SensorReadings? = null,
+    val watch: SensorReadings? = null,
 )
 
 data class SessionStatsSnapshot(

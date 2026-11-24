@@ -15,6 +15,9 @@ module FtmsState {
     var lastScanRaw = "";
     var debugText = "SCAN 0";
     var phoneBridgeActive = false;
+    var phoneBridgePaused = false;
+    // True while the phone bridge runs but has no data from the equipment.
+    var phoneBridgeWaiting = false;
     var lastPhoneBridgeMs = 0;
 
     function reset() {
@@ -32,6 +35,8 @@ module FtmsState {
         lastScanRaw = "";
         debugText = "SCAN 0";
         phoneBridgeActive = false;
+        phoneBridgePaused = false;
+        phoneBridgeWaiting = false;
         lastPhoneBridgeMs = 0;
     }
 
@@ -52,13 +57,46 @@ module FtmsState {
             lastSample = sample;
             packetCount += 1;
             phoneBridgeActive = true;
+            phoneBridgePaused = false;
+            phoneBridgeWaiting = false;
             lastPhoneBridgeMs = Sys.getTimer();
             statusText = "PHONE";
         }
     }
 
+    // The phone bridge runs but is still connecting to the equipment, or the equipment is
+    // silent. The bridge counts as there, so the watch does not connect to the equipment itself:
+    // most equipment accepts one connection, and it belongs to the phone.
+    function waitForPhoneBridge() {
+        phoneBridgeActive = true;
+        phoneBridgePaused = false;
+        phoneBridgeWaiting = true;
+        lastPhoneBridgeMs = Sys.getTimer();
+        statusText = "PWAIT";
+    }
+
+    // The phone repeats its pause message while paused, so a paused bridge stays "fresh" and is
+    // told apart from a phone that went away.
+    function pausePhoneBridge() {
+        phoneBridgeActive = true;
+        phoneBridgePaused = true;
+        phoneBridgeWaiting = false;
+        lastPhoneBridgeMs = Sys.getTimer();
+        statusText = "PAUSE";
+    }
+
+    function resumePhoneBridge() {
+        phoneBridgeActive = true;
+        phoneBridgePaused = false;
+        phoneBridgeWaiting = false;
+        lastPhoneBridgeMs = Sys.getTimer();
+        statusText = "PHONE";
+    }
+
     function stopPhoneBridge() {
         phoneBridgeActive = false;
+        phoneBridgePaused = false;
+        phoneBridgeWaiting = false;
         statusText = "STOP";
     }
 

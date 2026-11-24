@@ -6,23 +6,45 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
+/** True when everything the bridge cannot work without has been granted. */
 fun hasRuntimePermissions(context: Context): Boolean =
     requiredRuntimePermissions().all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
-fun requiredRuntimePermissions(): Array<String> {
-    val permissions = mutableListOf<String>()
+/** Permissions without which scanning and connecting are impossible. */
+fun requiredRuntimePermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        permissions += Manifest.permission.BLUETOOTH_SCAN
-        permissions += Manifest.permission.BLUETOOTH_CONNECT
+        arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
     } else {
-        permissions += Manifest.permission.ACCESS_FINE_LOCATION
+        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
+/**
+ * Permissions to ask the user for. Notifications are requested so the running bridge is visible,
+ * but declining them does not block the bridge: the foreground service keeps working without a
+ * visible notification.
+ */
+fun requestableRuntimePermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        permissions += Manifest.permission.POST_NOTIFICATIONS
+        requiredRuntimePermissions() + advertisePermissions() + Manifest.permission.POST_NOTIFICATIONS
+    } else {
+        requiredRuntimePermissions() + advertisePermissions()
     }
 
-    return permissions.toTypedArray()
-}
+/**
+ * Needed only for the running sensor the app can provide for the watch. Android shows it in the
+ * same "Nearby devices" group as scanning and connecting, so it adds no separate question there.
+ */
+fun advertisePermissions(): Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        arrayOf(Manifest.permission.BLUETOOTH_ADVERTISE)
+    } else {
+        emptyArray()
+    }
+
+/** True when the phone may be made visible as a Bluetooth sensor. */
+fun hasAdvertisePermission(context: Context): Boolean =
+    advertisePermissions().all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }

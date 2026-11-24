@@ -5,7 +5,7 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     var _bleClient;
     var _phoneBridge;
     var _fitWriter;
-    var _heartRatePublisher;
+    var _sensorPublisher;
     var _lastWrittenPacketCount = 0;
     var _primaryMetric = FtmsVariant.METRIC_ASCENT;
 
@@ -16,7 +16,7 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
 
         FtmsState.reset();
         _fitWriter = new FtmsFitWriter(self);
-        _heartRatePublisher = new GarminHeartRatePublisher();
+        _sensorPublisher = new WatchSensorPublisher();
         _phoneBridge = new FtmsPhoneBridgeReceiver();
         _phoneBridge.start();
         _bleClient = new FtmsBleClient();
@@ -34,6 +34,13 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
         // whole recorded activity while this data field is active.
     }
 
+    // The activity was saved or discarded.
+    function onTimerReset() {
+        if (_sensorPublisher != null) {
+            _sensorPublisher.announceActivityEnded();
+        }
+    }
+
     function shutdown() {
         if (_bleClient != null) {
             _bleClient.stop();
@@ -41,8 +48,8 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     }
 
     function compute(info) {
-        if (_heartRatePublisher != null) {
-            _heartRatePublisher.publish(info);
+        if (_sensorPublisher != null) {
+            _sensorPublisher.publish(info);
         }
 
         if (_bleClient != null) {
@@ -66,6 +73,14 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
 
         if (FtmsState.phoneBridgeActive && !FtmsState.hasFreshPhoneBridge(5000)) {
             return "PSTALE";
+        }
+
+        if (FtmsState.phoneBridgePaused) {
+            return "PAUSE";
+        }
+
+        if (FtmsState.phoneBridgeWaiting) {
+            return "PWAIT";
         }
 
         if (!FtmsState.phoneBridgeActive && FtmsState.isStale(4000)) {

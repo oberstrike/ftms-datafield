@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
-import de.ma.ftms.bridge.ble.requiredRuntimePermissions
+import de.ma.ftms.bridge.ble.requestableRuntimePermissions
 import de.ma.ftms.bridge.i18n.LocalStrings
 import de.ma.ftms.bridge.i18n.resolveStrings
 import de.ma.ftms.bridge.navigation.BridgeTab
@@ -71,7 +71,7 @@ fun FtmsBridgeApp(rootComponent: RootComponent) {
     }
 
     CompositionLocalProvider(LocalStrings provides strings) {
-        MaterialTheme {
+        BridgeTheme {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Scaffold(
                     topBar = {
@@ -102,7 +102,7 @@ fun FtmsBridgeApp(rootComponent: RootComponent) {
                     ) { child ->
                         RootChildContent(
                             child = child.instance,
-                            onRequestPermissions = { permissionLauncher.launch(requiredRuntimePermissions()) },
+                            onRequestPermissions = { permissionLauncher.launch(requestableRuntimePermissions()) },
                             onDashboardControlsVisibleChange = { dashboardControlsVisible = it },
                         )
                     }

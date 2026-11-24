@@ -33,6 +33,8 @@ internal val RSC_SERVICE_UUID: UUID = UUID.fromString("00001814-0000-1000-8000-0
 internal val RSC_MEASUREMENT_UUID: UUID = UUID.fromString("00002a53-0000-1000-8000-00805f9b34fb")
 internal val VENDOR_SERVICE_UUID: UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb")
 internal val VENDOR_NOTIFY_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
+internal val FITNESS_MACHINE_CONTROL_POINT_UUID: UUID = UUID.fromString("00002ad9-0000-1000-8000-00805f9b34fb")
+internal val SUPPORTED_POWER_RANGE_UUID: UUID = UUID.fromString("00002ad8-0000-1000-8000-00805f9b34fb")
 internal val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 data class TreadmillDeviceItem(
@@ -40,6 +42,8 @@ data class TreadmillDeviceItem(
     val name: String,
     val rssi: Int,
     val hasFtms: Boolean,
+    /** Equipment type the advertisement names, if it names exactly one. */
+    val advertisedType: EquipmentType? = null,
 )
 
 data class GarminDeviceItem(
@@ -48,6 +52,28 @@ data class GarminDeviceItem(
     val status: String,
     val appInstalled: Boolean?,
 )
+
+/** Why the Connect IQ SDK cannot reach the Garmin Connect app on this phone. */
+enum class GarminConnectProblem {
+    NOT_INSTALLED,
+    UPGRADE_NEEDED,
+    SERVICE_ERROR,
+}
+
+/** What auto-start is doing while the bridge is idle. */
+enum class AutoStartStatus {
+    /** Not active: switched off, the app is hidden, or something it needs is missing. */
+    OFF,
+
+    /** Looking for the selected equipment, which is switched off or out of range. */
+    WAITING,
+
+    /** Connected to the equipment; the bridge starts when it moves. */
+    READY,
+
+    /** Connected, but the equipment has to stop before the next start. */
+    HOLDING,
+}
 
 data class LastSessionSummary(
     val startedAtMillis: Long = 0,
@@ -119,11 +145,6 @@ enum class DashboardChartTimespan(val durationMillis: Long?) {
     FULL_SESSION(null),
 }
 
-enum class HeartRateSource {
-    GARMIN,
-    MACHINE,
-}
-
 enum class PowerSource {
     FTMS_PREFERRED,
     CALCULATED,
@@ -131,21 +152,45 @@ enum class PowerSource {
 
 data class BridgeSettings(
     val autoReconnect: Boolean = true,
+    val autoStart: Boolean = false,
+    /** End the session by itself once the equipment has come to a stop. */
+    val autoStop: Boolean = true,
+    /** Start, pause and stop the session together with the activity on the watch. */
+    val followWatchTimer: Boolean = true,
+    /** Offer the treadmill's speed and distance to the watch as a Bluetooth running sensor. */
+    val virtualFootPod: Boolean = false,
     val packetTimeoutSeconds: Int = 15,
     val sendIntervalMillis: Long = DEFAULT_SEND_INTERVAL_MS,
     val maxLogEntries: Int = 5_000,
     val debugLoggingEnabled: Boolean = false,
     val language: AppLanguage = AppLanguage.SYSTEM_DEFAULT,
     val showOpenAppNotificationAction: Boolean = true,
-    val heartRateSource: HeartRateSource = HeartRateSource.GARMIN,
+    /** Chosen source of heart rate, power and cadence per equipment type; default if absent. */
+    val sensorSources: Map<EquipmentType, SensorSources> = emptyMap(),
     val powerCalculationEnabled: Boolean = false,
     val powerSource: PowerSource = PowerSource.FTMS_PREFERRED,
     val powerBodyMassKg: Double? = null,
     val powerFlatCost: Double? = 1.22,
-    val dashboardMetrics: List<DashboardMetricKey> = DEFAULT_DASHBOARD_METRICS,
-    val dashboardGraphs: List<DashboardMetricKey> = DEFAULT_DASHBOARD_GRAPHS,
+    /** Dashboard contents per equipment type; types without an entry use their default. */
+    val dashboardLayouts: Map<EquipmentType, DashboardLayout> = emptyMap(),
     val dashboardChartTimespan: DashboardChartTimespan = DashboardChartTimespan.MINUTES_10,
+    /** Quick choices for the target power of an indoor bike, in watts. */
+    val targetPowerPresets: List<Int> = DEFAULT_TARGET_POWER_PRESETS,
+    /** How far one tap on plus or minus moves the target power. */
+    val targetPowerStepWatts: Int = DEFAULT_TARGET_POWER_STEP_WATTS,
 ) {
+    fun dashboardLayout(type: EquipmentType): DashboardLayout =
+        dashboardLayouts[type] ?: defaultDashboardLayout(type)
+
+    fun withDashboardLayout(type: EquipmentType, layout: DashboardLayout): BridgeSettings =
+        copy(dashboardLayouts = dashboardLayouts + (type to layout))
+
+    fun sensorSources(type: EquipmentType): SensorSources =
+        sensorSources[type] ?: SensorSources()
+
+    fun withSensorSource(type: EquipmentType, metric: SourcedMetric, source: ValueSource): BridgeSettings =
+        copy(sensorSources = sensorSources + (type to sensorSources(type).with(metric, source)))
+
     val packetTimeoutMillis: Long
         get() = packetTimeoutSeconds * 1_000L
 }
@@ -161,6 +206,7 @@ data class BridgeUiState(
     val garminReady: Boolean = false,
     val selectedTreadmillAddress: String? = null,
     val selectedTreadmillName: String? = null,
+    val selectedEquipmentType: EquipmentType = EquipmentType.TREADMILL,
     val selectedGarminId: Long? = null,
     val selectedGarminName: String? = null,
     val treadmills: List<TreadmillDeviceItem> = emptyList(),
@@ -168,6 +214,10 @@ data class BridgeUiState(
     val garminSdkStatus: String = "not initialized",
     val garminKnownDeviceCount: Int = 0,
     val garminLastMessage: String = "",
+    val garminConnectProblem: GarminConnectProblem? = null,
+    val autoStartStatus: AutoStartStatus = AutoStartStatus.OFF,
+    val footPodStatus: FootPodStatus = FootPodStatus.OFF,
+    val powerControl: PowerControlState = PowerControlState(),
     val latest: SmoothedTreadmillSample? = null,
     val liveDashboardSamples: List<SmoothedTreadmillSample> = emptyList(),
     val lastSendStatus: String = "idle",

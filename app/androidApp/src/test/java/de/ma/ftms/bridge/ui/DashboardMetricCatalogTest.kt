@@ -1,10 +1,12 @@
 package de.ma.ftms.bridge.ui
 
+import de.ma.ftms.bridge.i18n.DeStrings
 import de.ma.ftms.bridge.i18n.EnStrings
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
 import de.ma.ftms.core.DistanceSource
 import de.ma.ftms.core.FtmsSample
 import de.ma.ftms.core.SmoothedFtmsSample
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -42,6 +44,22 @@ class DashboardMetricCatalogTest {
             "5.0 %",
             DashboardMetricKey.AVG_INCLINE.format(samples.last(), EnStrings, samples, activeDurationMillis = 60_000L),
         )
+    }
+
+    @Test
+    fun formatsDecimalsInTheDisplayedLanguageNotTheSystemLocale() {
+        val sample = sample(speedKmh = 12.5, inclinePct = 3.0)
+        val systemLocale = Locale.getDefault()
+        try {
+            listOf(Locale.GERMANY, Locale.US, Locale.forLanguageTag("ar-EG")).forEach { locale ->
+                Locale.setDefault(locale)
+                assertEquals("12.50 km/h", DashboardMetricKey.SPEED.format(sample, EnStrings))
+                assertEquals("12,50 km/h", DashboardMetricKey.SPEED.format(sample, DeStrings))
+                assertEquals("4:48 min/km", DashboardMetricKey.PACE.format(sample, DeStrings))
+            }
+        } finally {
+            Locale.setDefault(systemLocale)
+        }
     }
 
     @Test

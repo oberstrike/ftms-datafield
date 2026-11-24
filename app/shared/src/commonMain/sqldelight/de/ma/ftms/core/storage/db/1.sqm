@@ -1,0 +1,17 @@
+-- Sessions remember the equipment type that was selected for them.
+ALTER TABLE workout_session ADD COLUMN equipment_kind INTEGER NOT NULL DEFAULT 2;
+
+-- Sessions recorded before the type could be selected take it from their first sample
+-- (1 indoor bike, 2 treadmill, 3 cross trainer) and stay a treadmill without samples.
+UPDATE workout_session
+SET equipment_kind = COALESCE(
+    (
+        SELECT session_sample.kind
+        FROM session_sample
+        WHERE session_sample.session_id = workout_session.session_id
+          AND session_sample.kind IN (1, 2, 3)
+        ORDER BY session_sample.offset_millis ASC
+        LIMIT 1
+    ),
+    2
+);

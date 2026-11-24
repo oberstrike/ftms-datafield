@@ -1,6 +1,7 @@
 package de.ma.ftms.core.storage
 
 import kotlinx.coroutines.flow.Flow
+import de.ma.ftms.core.FtmsMachineKind
 import de.ma.ftms.core.SmoothedFtmsSample
 
 interface SessionHistoryRepository {
@@ -14,6 +15,7 @@ interface SessionHistoryRepository {
         treadmillAddress: String?,
         garminName: String?,
         garminId: Long?,
+        equipmentKind: Int = FtmsMachineKind.TREADMILL,
     ): WorkoutSessionRecord
     suspend fun appendSample(sessionId: String, startedAtMillis: Long, sample: SmoothedFtmsSample)
     suspend fun updateStats(sessionId: String, nowMillis: Long, stats: SessionStatsSnapshot)
@@ -27,6 +29,7 @@ interface SessionHistoryRepository {
         garminId: Long?,
         stats: SessionStatsSnapshot,
         samples: List<SmoothedFtmsSample>,
+        equipmentKind: Int = FtmsMachineKind.TREADMILL,
     ): WorkoutSessionRecord
     suspend fun finishSession(
         sessionId: String,

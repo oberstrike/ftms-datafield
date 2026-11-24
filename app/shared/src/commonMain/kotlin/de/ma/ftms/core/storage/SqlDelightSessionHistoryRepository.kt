@@ -4,6 +4,7 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.db.SqlDriver
 import de.ma.ftms.core.DistanceSource
+import de.ma.ftms.core.SensorReadings
 import de.ma.ftms.core.SmoothedFtmsSample
 import de.ma.ftms.core.storage.db.FtmsBridgeDatabase
 import de.ma.ftms.core.storage.db.FtmsBridgeQueries
@@ -48,6 +49,7 @@ class SqlDelightSessionHistoryRepository(
         treadmillAddress: String?,
         garminName: String?,
         garminId: Long?,
+        equipmentKind: Int,
     ): WorkoutSessionRecord = withContext(databaseContext) {
         val id = newSessionId(startedAtMillis)
         queries.insertSession(
@@ -59,6 +61,7 @@ class SqlDelightSessionHistoryRepository(
             garmin_name = garminName,
             garmin_id = garminId,
             updated_at_millis = startedAtMillis,
+            equipment_kind = equipmentKind.toLong(),
         )
         queries.selectSessionById(id).executeAsOne().toRecord()
     }
@@ -99,6 +102,7 @@ class SqlDelightSessionHistoryRepository(
         garminId: Long?,
         stats: SessionStatsSnapshot,
         samples: List<SmoothedFtmsSample>,
+        equipmentKind: Int,
     ): WorkoutSessionRecord = withContext(databaseContext) {
         val id = newSessionId(startedAtMillis)
         val finalStats = stats.deriveFinalStats(samples)
@@ -120,6 +124,7 @@ class SqlDelightSessionHistoryRepository(
                 final_ascent_m = finalStats.ascentM,
                 final_speed_kmh = finalStats.speedKmh,
                 updated_at_millis = stoppedAtMillis,
+                equipment_kind = equipmentKind.toLong(),
             )
             samples.forEach { sample ->
                 insertSampleRow(id, startedAtMillis, sample)
@@ -190,6 +195,7 @@ class SqlDelightSessionHistoryRepository(
             finalAscentM = final_ascent_m,
             finalSpeedKmh = final_speed_kmh,
             updatedAtMillis = updated_at_millis,
+            equipmentKind = equipment_kind.toInt(),
         )
 
     private fun Session_sample.toRecord(): SessionSampleRecord =
@@ -215,6 +221,16 @@ class SqlDelightSessionHistoryRepository(
             remainingS = remaining_s?.toInt(),
             parseError = parse_error,
             distanceSource = runCatching { DistanceSource.valueOf(distance_source) }.getOrDefault(DistanceSource.NONE),
+            equipment = SensorReadings.ofNotEmpty(
+                powerW = equipment_power_w?.toInt(),
+                heartRateBpm = equipment_heart_rate_bpm?.toInt(),
+                cadenceRpm = equipment_cadence_rpm,
+            ),
+            watch = SensorReadings.ofNotEmpty(
+                powerW = watch_power_w?.toInt(),
+                heartRateBpm = watch_heart_rate_bpm?.toInt(),
+                cadenceRpm = watch_cadence_rpm,
+            ),
         )
 
     private fun SessionStatsSnapshot.deriveFinalStats(samples: List<SmoothedFtmsSample> = emptyList()): FinalSessionStats =
@@ -284,6 +300,12 @@ class SqlDelightSessionHistoryRepository(
             remaining_s = raw.remainingS?.toLong(),
             parse_error = raw.parseError,
             distance_source = sample.distanceSource.name,
+            equipment_power_w = raw.equipment?.powerW?.toLong(),
+            equipment_heart_rate_bpm = raw.equipment?.heartRateBpm?.toLong(),
+            equipment_cadence_rpm = raw.equipment?.cadenceRpm,
+            watch_power_w = raw.watch?.powerW?.toLong(),
+            watch_heart_rate_bpm = raw.watch?.heartRateBpm?.toLong(),
+            watch_cadence_rpm = raw.watch?.cadenceRpm,
         )
     }
 

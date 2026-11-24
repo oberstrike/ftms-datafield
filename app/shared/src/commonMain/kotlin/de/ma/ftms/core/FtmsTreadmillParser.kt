@@ -7,6 +7,7 @@ object FtmsTreadmillParser {
         return runCatching {
             requireLength(bytes, 0, 2)
             val flags = u16(bytes, 0)
+            val paceWidth = treadmillPaceFieldWidth(flags, bytes.size)
             var offset = 2
 
             var speedKmh: Double? = null
@@ -54,13 +55,13 @@ object FtmsTreadmillParser {
             }
 
             if (hasFlag(flags, 5)) {
-                requireLength(bytes, offset, 2)
-                offset += 2
+                requireLength(bytes, offset, paceWidth)
+                offset += paceWidth
             }
 
             if (hasFlag(flags, 6)) {
-                requireLength(bytes, offset, 2)
-                offset += 2
+                requireLength(bytes, offset, paceWidth)
+                offset += paceWidth
             }
 
             if (hasFlag(flags, 7)) {
@@ -393,6 +394,44 @@ object FtmsParser {
             FtmsMachineKind.CROSS_TRAINER -> FtmsCrossTrainerParser.parse(bytes, timestampMillis)
             else -> FtmsTreadmillParser.parse(bytes, timestampMillis)
         }
+}
+
+/**
+ * Width in bytes of the Instantaneous/Average Pace fields of Treadmill Data.
+ *
+ * The current GATT Specification Supplement defines both as uint16, while the original FTMS 1.0
+ * characteristic definition used uint8 and machines built against it send one byte each. Every
+ * field after pace would shift if the wrong width were assumed, so the width is taken from
+ * whichever variant matches the notification length exactly; uint16 is the default.
+ */
+internal fun treadmillPaceFieldWidth(flags: Int, recordLength: Int): Int {
+    if (!hasFlag(flags, 5) && !hasFlag(flags, 6)) {
+        return 2
+    }
+
+    return when (recordLength) {
+        treadmillRecordLength(flags, paceWidth = 2) -> 2
+        treadmillRecordLength(flags, paceWidth = 1) -> 1
+        else -> 2
+    }
+}
+
+private fun treadmillRecordLength(flags: Int, paceWidth: Int): Int {
+    var length = 2
+    if (!hasFlag(flags, 0)) length += 2
+    if (hasFlag(flags, 1)) length += 2
+    if (hasFlag(flags, 2)) length += 3
+    if (hasFlag(flags, 3)) length += 4
+    if (hasFlag(flags, 4)) length += 4
+    if (hasFlag(flags, 5)) length += paceWidth
+    if (hasFlag(flags, 6)) length += paceWidth
+    if (hasFlag(flags, 7)) length += 5
+    if (hasFlag(flags, 8)) length += 1
+    if (hasFlag(flags, 9)) length += 1
+    if (hasFlag(flags, 10)) length += 2
+    if (hasFlag(flags, 11)) length += 2
+    if (hasFlag(flags, 12)) length += 4
+    return length
 }
 
 private fun ByteArray.toRawHex(): String =

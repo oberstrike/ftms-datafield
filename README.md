@@ -9,7 +9,7 @@ The project contains two parts:
 - an Android bridge app that connects to FTMS equipment, stores sessions locally, and forwards live samples to a Garmin watch through the Garmin Connect IQ companion channel
 - a Garmin Connect IQ data field source project that receives bridge samples and writes custom FIT developer fields
 
-The bridge is designed as a read-only data bridge. It does not write to the FTMS Control Point `0x2AD9` and does not send vendor control commands to the treadmill.
+The bridge reads the equipment and nothing else, with one exception: for the equipment type "Indoor cycling" it can set a target power through the FTMS Control Point `0x2AD9` when you ask for one. Treadmills and cross trainers are never written to, and no vendor control commands are sent.
 
 ## Download v1.0.0
 
@@ -49,6 +49,122 @@ You need both the Android app and the Garmin Connect IQ data field on the watch.
 
 The app stores sessions locally and shows history, charts, and diagnostic logs. The watch records received values as Connect IQ FIT developer fields.
 
+### Equipment type
+
+On the `Devices` tab you choose what the selected equipment is: `Treadmill`, `Indoor cycling` or `Cross trainer`. Equipment that names its type while advertising is preselected when you pick it; you can change the choice while the bridge is stopped.
+
+- The dashboard has its own set of live values and charts for each type. An indoor bike starts with power, cadence, speed, heart rate, distance and resistance, without pace, incline and ascent. `Settings > Dashboard` edits the set for each type.
+- Each session is stored with its type. The history shows the type, leaves out values that do not apply to it, and can be filtered by type once more than one type is stored. Sessions from before this version get their type from the data they contain.
+- The treadmill power estimate is applied to treadmills only.
+- If the equipment sends another type of data than the one selected, the dashboard says so.
+
+### Target power for an indoor bike
+
+With the type `Indoor cycling`, the dashboard shows a `Target power` card while the bike is connected:
+
+- Tap a preset to set that target, or use plus and minus to move it in steps. Without a target, the first step starts from the power the bike currently measures.
+- The card shows whether the bike confirmed or refused the target, and the range of targets the bike reports.
+- The target is set again after a reconnect within the session and is forgotten when the session stops. The app has no button to switch the target off; use the bike's own controls to leave its power mode.
+- `Settings > Indoor cycling` holds the presets (up to 8, from 10 to 2000 W; the defaults are 100, 150, 200 and 250 W) and the step size (5, 10 or 25 W).
+
+The bike must offer the FTMS Control Point with "Set Target Power". If it does not, the card says so.
+
+The bike holds the target by its own measurement. If you show the power of pedals instead (see below), that value can differ from the target by a few percent; the app does not correct the target for it.
+
+### Values from the watch
+
+The watch sends its heart rate to the phone, and with it the power and cadence it has for the running activity. That includes sensors paired with the watch, such as a chest strap or power meter pedals. The app does not connect to these sensors itself.
+
+- The dashboard card `Sources` shows the value of the equipment and of the watch side by side for heart rate, power and cadence. Tap one to use it. The same choice is under `Settings > Data sources`, kept separately for each equipment type.
+- The default is heart rate from the watch, power and cadence from the equipment.
+- The chosen value is used for the display, the history and the values sent to the watch.
+- If the chosen source delivers nothing for 5 seconds, the value stays empty. The app does not switch to the other source by itself.
+- Both values are stored with the session. For a session that contains both, the history shows the average of each, the difference, and a chart with both lines.
+- The treadmill power estimate counts as a value of the equipment.
+- The watch values are shown while the equipment sends data.
+
+Power and cadence need this version of both the Android app and the data field. With an older data field the watch sends heart rate only.
+
+### Running sensor for the watch
+
+On a treadmill the watch estimates pace and distance of its activity from arm movement, and a Connect IQ data field is not allowed to replace them. With `Settings > Bridge behavior > Running sensor for the watch` switched on, the phone offers the treadmill's values to the watch as a Bluetooth foot pod instead. A watch takes pace, distance and step rate from a paired foot pod.
+
+**A watch does not use the phone as a sensor and through Garmin Connect at once.** It recognises the sensor as the phone it is paired with, and it keeps one connection to a device. With a Forerunner 970 the sensor does not connect while the phone connection of the watch is on, and while the sensor is connected, the data field and the app no longer reach each other. There are two ways around that.
+
+#### With a relay on a computer: sensor and data field together
+
+A computer in between takes the phone's sensor and offers it to the watch under its own Bluetooth address. The watch then has two different devices, and both connections work at once:
+
+    treadmill --FTMS--> phone (bridge app) --foot pod--> computer --foot pod--> watch
+
+The relay is `tools/footPodRelay/foot_pod_relay.py`. It needs Linux with BlueZ and a Bluetooth adapter that can be central and peripheral at once, and it has to run within Bluetooth range of phone and watch.
+
+    python3 -m venv .venv-foot-pod-relay
+    .venv-foot-pod-relay/bin/pip install -r tools/footPodRelay/requirements-foot-pod-relay.txt
+    .venv-foot-pod-relay/bin/python tools/footPodRelay/foot_pod_relay.py
+
+1. Start the relay. It offers a sensor named `FTMS Bridge` and waits for the phone's sensor.
+2. In the app, switch the setting on and choose the type `Treadmill`.
+3. Once only: on the watch, add a new sensor of the type foot pod (on a Forerunner under `Sensors & Accessories`) and pick the relay. In its settings, set speed and distance to `Indoor`, the calibration factor to 100 and switch automatic calibration off. Otherwise the watch scales the treadmill's values. Remove an entry of the phone itself from the watch's sensors, or the watch connects to the phone directly.
+4. Start the activity on the watch. The session starts (see "Starting and stopping with the watch"), the phone offers its sensor, the relay passes it on.
+
+Tested with a Forerunner 970 (firmware 19.23) and BlueZ 5.82. On the first attempt the watch's firmware crashed eight seconds after the sensor was added while measurements were already flowing; later attempts, with the watch connecting before the session started, ran without a problem. The cause is not known.
+
+#### Without a relay: sensor instead of the data field
+
+1. On the watch, switch the phone connection off.
+2. In the app, switch the setting on, choose the type `Treadmill` and start the bridge. In this mode the bridge starts without reaching the data field. The status card on the dashboard shows `Running sensor: waiting for the watch`.
+3. Once only: add the sensor on the watch as described above. The phone is listed with an ID made of its Bluetooth address, not with a name.
+4. The status card shows `connected to the watch`. Start the treadmill activity on the watch.
+5. After the run, stop the bridge or switch the setting off, and switch the phone connection of the watch on again.
+
+During that time the data field receives no values (incline, ascent, the Connect IQ fields), and the app receives no heart rate, power or cadence from the watch. The app still records its own session completely.
+
+#### What the sensor sends
+
+- The phone is visible as a sensor only while the bridge runs with the type `Treadmill`.
+- It sends speed, total distance and step rate once a second. While the bridge is paused it sends standstill, and when the treadmill delivers nothing, it sends nothing.
+- The step rate is the treadmill's own. Treadmills with the FitShow protocol report no step rate through FTMS; for them the app works it out from the step count in their vendor packets. If a treadmill offers neither, the sensor sends 0, and the watch records that instead of its own step rate, which also sets values the watch derives from it, such as its running power, to 0.
+- Incline and ascent have no place in a foot pod.
+- Android needs the permission to make the phone visible to nearby devices. It belongs to the same group as the Bluetooth permissions the app already has.
+
+### Correcting the distance on the watch
+
+If you keep the data field instead, the activity keeps the watch's own estimate of the distance. At the end of a treadmill activity a Garmin watch offers `Calibrate & Save`: enter the distance the app shows for the session (`Last session` on the dashboard, or the history). The watch then stores that distance and uses it to improve its estimate for later runs.
+
+### Starting and stopping with the watch
+
+With `Settings > Bridge behavior > Follow the activity on the watch` (on by default) you do not need `Start` and `Stop` in the app, steps 8 and 10: the session follows the activity that contains the data field.
+
+- Starting the activity on the watch starts the session. If the app is opened while the activity already records, the session starts within a few seconds.
+- Stopping the activity on the watch pauses the session, resuming it resumes the session. Auto pause on the watch does not pause the session.
+- Saving or discarding the activity ends the session.
+- The app has to be open on the phone when the activity starts, with treadmill and watch selected. The watch needs the data field from this version; an older data field does not report the activity.
+- Without a phone session the data field connects to the treadmill itself. When the session starts, it hands the connection over to the phone and shows `PWAIT` until the phone has data, which can take a few seconds.
+- `Start`, `Pause` and `Stop` in the app keep working. What you do there stays until the state of the activity on the watch changes again.
+- A session that already runs when the activity starts simply continues. For a session that covers exactly the activity, leave `Auto start` off and let the watch start it.
+
+### Auto stop
+
+With `Settings > Bridge behavior > Auto stop` (on by default) a treadmill session ends by itself once the belt has stood still for 30 seconds, or the treadmill has been out of reach for 90 seconds. The session then ends at the moment the belt stopped, so the wait does not count as session time.
+
+- A session whose belt has not moved yet is left alone, so you can start it before you step on.
+- While the watch reports an activity of its own, the watch decides when the session ends and a break on the belt does not end it. If the watch has not been heard from for 20 seconds, the stop of the belt ends the session again.
+- Sessions on an indoor bike or cross trainer do not end by themselves, because standing still there is just a break. They end when the activity on the watch is saved or discarded, or with `Stop` in the app.
+
+### Distance of a session
+
+A session counts its distance and ascent from its own start. What the equipment already showed when the session began is left out, and so is what is covered while the session is paused. If the equipment is reset during a session, the session keeps what it has counted and continues from there.
+
+### Auto start
+
+With `Settings > Bridge behavior > Auto start` switched on, step 8 is not needed: while the app is open, the bridge starts as soon as the belt of the selected treadmill moves. The watch must already be selected and show the data field as installed.
+
+- Auto start works only while the app is on screen. It does not start the bridge with the phone locked or the app in the background.
+- While it waits, the app is connected to the treadmill. Most treadmills accept one connection only, so other apps cannot connect to it during that time.
+- An indoor bike or cross trainer counts as moving as soon as it reports speed or cadence.
+- After a session ends, auto start waits until the belt has stopped. If the treadmill is switched off while the belt still moves, it waits until the treadmill has been off for a minute, and 30 minutes at most.
+
 ## Supported FTMS Data
 
 The parser supports these standard FTMS characteristics:
@@ -57,7 +173,7 @@ The parser supports these standard FTMS characteristics:
 - Treadmill Data `0x2ACD`
 - Cross Trainer / Elliptical Data `0x2ACE`
 
-The current Android bridge has been tested primarily with the Darwin TM70 Touch / `FS-BC11B7` treadmill.
+The current Android bridge has been tested primarily with the Darwin TM70 Touch / `FS-BC11B7` treadmill. The indoor cycling view and the target power control have been tested against a simulated FTMS bike only, not yet on a real one. Power and cadence from the watch have been tested with simulated watch values only; which values a watch delivers for which activity and sensor is not yet confirmed on a real one. The running sensor for the watch has been tested with a Forerunner 970: it connects and receives the values while its phone connection is off. How the watch uses them in the recorded activity is not yet confirmed.
 
 ## Garmin Data Fields
 
@@ -95,6 +211,7 @@ The data field does not overwrite Garmin native distance, speed, power, or eleva
 
 - Make sure the Garmin Connect app is installed and paired with the watch.
 - Open Garmin Connect once before scanning in FTMS Bridge.
+- If the Devices screen says Garmin Connect is missing or too old, use the install or update button there, then return to FTMS Bridge.
 - Confirm the Connect IQ data field is installed on the watch.
 - Refresh Garmin devices in the Android app.
 
@@ -113,8 +230,8 @@ Some treadmills report FTMS distance only in coarse or stale increments. The bri
 
 Requirements:
 
-- JDK 17
-- Android SDK
+- JDK 17 or newer (builds are verified with JDK 21)
+- Android SDK with platform 37.1
 - Node.js and npm
 - Garmin Connect IQ SDK for Garmin data-field builds
 - A Garmin Connect IQ developer key for `.prg` or `.iq` builds

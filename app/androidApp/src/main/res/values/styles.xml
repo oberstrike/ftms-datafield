@@ -1,7 +1,6 @@
 <resources>
+    <!-- Only covers the moment before Compose draws; bar colors and icons are set by enableEdgeToEdge. -->
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#f8fafc</item>
-        <item name="android:navigationBarColor">#f8fafc</item>
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 </resources>

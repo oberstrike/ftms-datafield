@@ -1,0 +1,16 @@
+{
+  "name": "footPodRelay",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "tools/footPodRelay",
+  "targets": {
+    "run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": ". .venv-foot-pod-relay/bin/activate && python tools/footPodRelay/foot_pod_relay.py",
+        "cwd": "."
+      }
+    }
+  },
+  "tags": ["type:tool", "platform:linux"]
+}

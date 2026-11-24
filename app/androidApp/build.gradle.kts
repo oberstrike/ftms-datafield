@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "de.ma.ftms.bridge"
-    compileSdk = libs.versions.androidCompileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.androidCompileSdk.get().toInt()) {
+            minorApiLevel = libs.versions.androidCompileSdkMinor.get().toInt()
+        }
+    }
 
     defaultConfig {
         applicationId = "de.ma.ftms.bridge"

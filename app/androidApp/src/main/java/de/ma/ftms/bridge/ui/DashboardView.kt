@@ -28,6 +28,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -36,11 +38,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.ma.ftms.bridge.i18n.LocalStrings
+import de.ma.ftms.bridge.i18n.fmt
+import de.ma.ftms.bridge.i18n.formatNeutral
 import de.ma.ftms.bridge.i18n.Strings
 import de.ma.ftms.bridge.navigation.DashboardComponent
+import de.ma.ftms.bridge.runtime.AutoStartStatus
+import de.ma.ftms.bridge.runtime.isFootPodMode
+import de.ma.ftms.bridge.runtime.isEquipmentTypeMismatch
 import de.ma.ftms.bridge.runtime.BridgeUiState
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.PowerControlState
+import de.ma.ftms.bridge.runtime.PowerControlStatus
+import de.ma.ftms.bridge.runtime.SensorSources
+import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.ValueSource
 import de.ma.ftms.bridge.runtime.LastSessionSummary
+import de.ma.ftms.core.SensorReadings
 import de.ma.ftms.core.SmoothedTreadmillSample
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -85,6 +99,28 @@ fun DashboardView(
                     onStop = component::onStopBridge,
                 )
             }
+            if (state.selectedEquipmentType == EquipmentType.INDOOR_BIKE) {
+                item {
+                    TargetPowerCard(
+                        control = state.powerControl,
+                        presets = state.settings.targetPowerPresets,
+                        stepWatts = state.settings.targetPowerStepWatts,
+                        strings = strings,
+                        onSetTarget = component::onSetTargetPower,
+                        onStep = component::onStepTargetPower,
+                    )
+                }
+            }
+            item {
+                SourcesCard(
+                    sources = state.settings.sensorSources(state.selectedEquipmentType),
+                    equipment = state.latest?.raw?.equipment,
+                    watch = state.latest?.raw?.watch,
+                    type = state.selectedEquipmentType,
+                    strings = strings,
+                    onSelect = component::onSelectSensorSource,
+                )
+            }
             item { ConnectionStatus(state = state, strings = strings) }
             item {
                 DashboardModeSwitch(
@@ -99,7 +135,7 @@ fun DashboardView(
                         sample = state.latest,
                         samples = state.liveDashboardSamples,
                         activeDurationMillis = state.activeDurationMillis,
-                        metricKeys = state.settings.dashboardMetrics,
+                        metricKeys = state.settings.dashboardLayout(state.selectedEquipmentType).metrics,
                         strings = strings,
                     )
                 }
@@ -111,7 +147,7 @@ fun DashboardView(
                 }
             } else {
                 items(
-                    items = state.settings.dashboardGraphs,
+                    items = state.settings.dashboardLayout(state.selectedEquipmentType).graphs,
                     key = { key -> "dashboard-chart-${key.name}" },
                 ) { key ->
                     MetricChart(strings = strings, key = key, samples = liveDashboardSamples)
@@ -170,8 +206,13 @@ private fun BridgeControlCard(
                 },
                 style = MaterialTheme.typography.titleLarge,
             )
+            val equipmentName = state.selectedTreadmillName ?: state.selectedTreadmillAddress
             Text(
-                state.selectedTreadmillName ?: state.selectedTreadmillAddress ?: strings.dashboard.noFtmsEquipmentSelected,
+                if (equipmentName == null) {
+                    strings.dashboard.noFtmsEquipmentSelected
+                } else {
+                    "$equipmentName · ${equipmentTypeLabel(state.selectedEquipmentType, strings)}"
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -180,6 +221,30 @@ private fun BridgeControlCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            val autoStartText = when (state.autoStartStatus) {
+                AutoStartStatus.OFF -> null
+                AutoStartStatus.WAITING -> strings.dashboard.autoStartWaiting
+                AutoStartStatus.READY -> strings.dashboard.autoStartReady
+                AutoStartStatus.HOLDING -> strings.dashboard.autoStartHolding
+            }
+            if (autoStartText != null) {
+                Text(
+                    autoStartText,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            val receivedKind = state.latest?.raw?.kind?.takeIf { state.running }
+            if (receivedKind != null && isEquipmentTypeMismatch(state.selectedEquipmentType, receivedKind)) {
+                Text(
+                    strings.dashboard.equipmentTypeMismatch(
+                        selected = equipmentTypeLabel(state.selectedEquipmentType, strings),
+                        received = machineLabel(receivedKind, strings),
+                    ),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -218,6 +283,131 @@ private fun BridgeControlCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun TargetPowerCard(
+    control: PowerControlState,
+    presets: List<Int>,
+    stepWatts: Int,
+    strings: Strings,
+    onSetTarget: (Int) -> Unit,
+    onStep: (Int) -> Unit,
+) {
+    val canSet = control.canSetTarget
+    val failed = control.status == PowerControlStatus.REJECTED || control.status == PowerControlStatus.FAILED
+    val statusText = when (control.status) {
+        PowerControlStatus.DISCONNECTED -> strings.dashboard.targetPowerDisconnected
+        PowerControlStatus.UNSUPPORTED -> strings.dashboard.targetPowerUnsupported
+        PowerControlStatus.READY -> strings.dashboard.targetPowerReady
+        PowerControlStatus.SENDING -> strings.dashboard.targetPowerSending
+        PowerControlStatus.ACTIVE -> strings.dashboard.targetPowerActive
+        PowerControlStatus.REJECTED -> strings.dashboard.targetPowerRejected
+        PowerControlStatus.FAILED -> strings.dashboard.targetPowerFailed
+    }
+
+    Section(strings.dashboard.targetPower) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedButton(enabled = canSet, onClick = { onStep(-1) }) {
+                Text("−$stepWatts")
+            }
+            Text(
+                control.targetWatts?.let { "$it W" } ?: strings.dashboard.targetPowerNotSet,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(enabled = canSet, onClick = { onStep(1) }) {
+                Text("+$stepWatts")
+            }
+        }
+        Text(
+            statusText,
+            color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (presets.isEmpty()) {
+            Text(
+                strings.dashboard.targetPowerNoPresets,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                presets.forEach { watts ->
+                    FilterChip(
+                        selected = control.targetWatts == watts,
+                        enabled = canSet,
+                        onClick = { onSetTarget(watts) },
+                        label = { Text("$watts W") },
+                    )
+                }
+            }
+        }
+        control.range?.let { range ->
+            Text(
+                strings.dashboard.targetPowerRange(range.minWatts, range.maxWatts),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+/** Shows what equipment and watch report next to each other and lets the user pick per value. */
+@Composable
+private fun SourcesCard(
+    sources: SensorSources,
+    equipment: SensorReadings?,
+    watch: SensorReadings?,
+    type: EquipmentType,
+    strings: Strings,
+    onSelect: (SourcedMetric, ValueSource) -> Unit,
+) {
+    Section(strings.dashboard.sectionSources) {
+        SourcedMetric.entries.forEach { metric ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    sourcedMetricLabel(metric, strings),
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(0.8f),
+                )
+                ValueSource.entries.forEach { source ->
+                    val readings = if (source == ValueSource.EQUIPMENT) equipment else watch
+                    val value = formatSourceValue(metric, readings, type) ?: strings.common.missingValue
+                    FilterChip(
+                        selected = sources.of(metric) == source,
+                        onClick = { onSelect(metric, source) },
+                        label = {
+                            Column {
+                                Text(valueSourceLabel(source, strings), style = MaterialTheme.typography.labelSmall)
+                                Text(value, style = MaterialTheme.typography.titleMedium)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+        Text(
+            strings.dashboard.sourcesHint,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun ConnectionStatus(state: BridgeUiState, strings: Strings) {
     Section(strings.dashboard.sectionStatus) {
         FlowRow(
@@ -240,6 +430,16 @@ private fun ConnectionStatus(state: BridgeUiState, strings: Strings) {
         }
 
         StatusRow(strings.dashboard.send, state.lastSendStatus)
+        if (state.settings.virtualFootPod) {
+            StatusRow(strings.dashboard.footPod, footPodStatusLabel(state, strings))
+            if (isFootPodMode(state.settings, state.selectedEquipmentType)) {
+                Text(
+                    strings.dashboard.footPodHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         StatusRow(strings.common.packets, state.packetCount.toString())
         StatusRow(strings.common.sends, strings.common.sendSummary(state.sendSuccessCount, state.sendFailureCount))
         if (state.lastError.isNotBlank()) {
@@ -300,9 +500,9 @@ private fun MetricChart(strings: Strings, key: DashboardMetricKey, samples: List
         val endTime = formatChartTime(endSeconds)
         val chartDescription = strings.dashboard.chartSummary(
             title = title,
-            latest = "%.1f".format(points.last().y),
-            min = "%.1f".format(min),
-            max = "%.1f".format(max),
+            latest = strings.fmt("%.1f", points.last().y),
+            min = strings.fmt("%.1f", min),
+            max = strings.fmt("%.1f", max),
             start = startTime,
             end = endTime,
         )
@@ -487,9 +687,9 @@ private fun formatChartTime(seconds: Double): String {
     val minutes = (totalSeconds % 3_600L) / 60L
     val remainingSeconds = totalSeconds % 60L
     return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, remainingSeconds)
+        formatNeutral("%d:%02d:%02d", hours, minutes, remainingSeconds)
     } else {
-        "%02d:%02d".format(minutes, remainingSeconds)
+        formatNeutral("%02d:%02d", minutes, remainingSeconds)
     }
 }
 
@@ -502,8 +702,8 @@ private fun LastSession(summary: LastSessionSummary?, strings: Strings) {
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricTile(strings.common.distance, "%.2f km".format(summary.finalDistanceM / 1000.0), Modifier.weight(1f))
-            MetricTile(strings.common.ascent, "%.1f m".format(summary.finalAscentM), Modifier.weight(1f))
+            MetricTile(strings.common.distance, strings.fmt("%.2f km", summary.finalDistanceM / 1000.0), Modifier.weight(1f))
+            MetricTile(strings.common.ascent, strings.fmt("%.1f m", summary.finalAscentM), Modifier.weight(1f))
         }
         StatusRow(strings.common.status, summary.finalStatus)
         StatusRow(strings.common.packets, summary.packetCount.toString())

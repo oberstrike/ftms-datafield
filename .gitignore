@@ -9,6 +9,7 @@ build/
 node_modules/
 __pycache__/
 .venv-ftms-probe/
+.venv-foot-pod-relay/
 
 # IDE and local workspace files
 .idea/

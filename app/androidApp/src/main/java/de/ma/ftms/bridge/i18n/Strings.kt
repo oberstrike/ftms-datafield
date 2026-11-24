@@ -1,6 +1,8 @@
 package de.ma.ftms.bridge.i18n
 
 interface Strings {
+    /** Locale used for number and date formatting in this language. */
+    val locale: java.util.Locale
     val common: CommonStrings
     val nav: NavigationStrings
     val dashboard: DashboardStrings
@@ -32,6 +34,8 @@ interface CommonStrings {
     val garmin: String
     val unknown: String
     val machine: String
+    val sourceEquipment: String
+    val sourceWatch: String
     val resistance: String
     val speed: String
     val averageSpeed: String
@@ -69,8 +73,13 @@ interface DashboardStrings {
     val bridgeIdle: String
     val noFtmsEquipmentSelected: String
     val noGarminWatchSelected: String
+    val autoStartWaiting: String
+    val autoStartReady: String
+    val autoStartHolding: String
     val grantBluetoothPermissions: String
     val sectionStatus: String
+    val sectionSources: String
+    val sourcesHint: String
     val sectionLiveMetrics: String
     val sectionLiveCharts: String
     val sectionLastSession: String
@@ -83,6 +92,15 @@ interface DashboardStrings {
     val ftmsConnected: String
     val ftmsDisconnected: String
     val garminReady: String
+    val footPod: String
+    val footPodOff: String
+    val footPodTreadmillOnly: String
+    val footPodUnsupported: String
+    val footPodPermissionMissing: String
+    val footPodAdvertising: String
+    val footPodConnected: String
+    val footPodFailed: String
+    val footPodHint: String
     val garminPending: String
     val send: String
     val startBlockBridgeRunning: String
@@ -94,6 +112,18 @@ interface DashboardStrings {
     val machineBike: String
     val machineTreadmill: String
     val machineCrossTrainer: String
+    fun equipmentTypeMismatch(selected: String, received: String): String
+    val targetPower: String
+    val targetPowerNotSet: String
+    val targetPowerDisconnected: String
+    val targetPowerUnsupported: String
+    val targetPowerReady: String
+    val targetPowerSending: String
+    val targetPowerActive: String
+    val targetPowerRejected: String
+    val targetPowerFailed: String
+    val targetPowerNoPresets: String
+    fun targetPowerRange(minWatts: Int, maxWatts: Int): String
     fun chartSummary(title: String, latest: String, min: String, max: String, start: String, end: String): String
 }
 
@@ -118,6 +148,14 @@ interface DevicesStrings {
     val garminSdkStatus: String
     val garminKnownDevices: String
     val garminLastMessage: String
+    val garminConnectNotInstalled: String
+    val garminConnectUpgradeNeeded: String
+    val garminConnectServiceError: String
+    val installGarminConnect: String
+    val updateGarminConnect: String
+    val equipmentType: String
+    val equipmentTypeSubtitle: String
+    val equipmentTypeLockedWhileRunning: String
 }
 
 interface HistoryStrings {
@@ -141,6 +179,8 @@ interface HistoryStrings {
     val chartResistance: String
     val viewMetrics: String
     val viewCharts: String
+    val filterAll: String
+    val sourceComparison: String
     fun savedSessions(count: Int): String
 }
 
@@ -172,14 +212,29 @@ interface SettingsStrings {
     val dashboardMetricsSubtitle: String
     val dashboardGraphs: String
     val dashboardGraphsSubtitle: String
+    val dashboardEquipmentType: String
+    val dataSources: String
+    val dataSourcesSubtitle: String
+    val dataSourcesHint: String
+    val dataSourcesEquipmentType: String
+    val indoorCycling: String
+    val indoorCyclingSubtitle: String
+    val targetPowerPresets: String
+    val targetPowerPresetsSubtitle: String
+    val targetPowerNewPreset: String
+    val targetPowerAddPreset: String
+    val targetPowerStep: String
+    val targetPowerStepSubtitle: String
+    val targetPowerRestoreDefaults: String
+    val targetPowerRestoreDefaultsSubtitle: String
+    val targetPowerRestoreAction: String
+    fun targetPowerPresetLimits(minWatts: Int, maxWatts: Int, maxCount: Int): String
+    fun targetPowerRemovePreset(watts: Int): String
     val dashboardChartTimespan: String
     val chartTimespanFullSession: String
     val keepOneDashboardOptionSelected: String
     val notificationShortcut: String
     val notificationShortcutSubtitle: String
-    val heartRateSource: String
-    val heartRateSourceGarmin: String
-    val heartRateSourceMachine: String
     val powerEstimate: String
     val powerEstimateSubtitle: String
     val powerSource: String
@@ -191,6 +246,14 @@ interface SettingsStrings {
     val powerInvalidSettings: String
     val autoReconnect: String
     val autoReconnectSubtitle: String
+    val autoStart: String
+    val autoStartSubtitle: String
+    val autoStop: String
+    val autoStopSubtitle: String
+    val followWatchTimer: String
+    val followWatchTimerSubtitle: String
+    val virtualFootPod: String
+    val virtualFootPodSubtitle: String
     val timing: String
     val timingSubtitle: String
     val packetTimeout: String

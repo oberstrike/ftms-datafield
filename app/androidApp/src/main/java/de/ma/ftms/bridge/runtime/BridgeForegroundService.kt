@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.getSystemService
 import de.ma.ftms.bridge.MainActivity
 import de.ma.ftms.bridge.R
@@ -24,30 +26,44 @@ class BridgeForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_PAUSE) {
-            BridgeRuntime.pauseBridge()
-            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
-            return START_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                BridgeRuntime.stopBridge { stopSelf() }
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> BridgeRuntime.pauseBridge()
+            ACTION_RESUME -> BridgeRuntime.resumeBridge()
         }
 
-        if (intent?.action == ACTION_RESUME) {
-            BridgeRuntime.resumeBridge()
-            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
-            return START_STICKY
-        }
-
-        if (intent?.action == ACTION_STOP) {
-            BridgeRuntime.stopBridge { stopSelf() }
+        if (intent?.action != ACTION_START) {
+            if (BridgeRuntime.state.value.running) {
+                getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
+            } else {
+                // Nothing to keep alive: the process was restarted without a running bridge, or an
+                // action of an outdated notification arrived. Do not leave a notification behind
+                // that claims the bridge is active.
+                getSystemService<NotificationManager>()?.cancel(NOTIFICATION_ID)
+                stopSelf()
+            }
             return START_NOT_STICKY
         }
 
-        if (intent?.action == ACTION_REFRESH) {
-            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
-            return START_STICKY
+        val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        } else {
+            0
         }
-
-        startForeground(NOTIFICATION_ID, notification())
-        return START_STICKY
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), foregroundType)
+        } catch (error: RuntimeException) {
+            // Android refuses the foreground start when the Bluetooth permission was revoked or
+            // the app is not allowed to start foreground services right now.
+            BridgeRuntime.onForegroundServiceUnavailable(error.message ?: error::class.simpleName.orEmpty())
+            stopSelf()
+        }
+        // The bridge state lives in this process only, so a restart by the system after the
+        // process was killed could not resume the session anyway.
+        return START_NOT_STICKY
     }
 
     private fun ensureNotificationChannel() {

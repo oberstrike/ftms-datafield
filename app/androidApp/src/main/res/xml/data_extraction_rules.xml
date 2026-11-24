@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ ignores allowBackup="false" for device-to-device transfers, so the rules are spelled
+  out here: nothing goes to cloud backup; a direct transfer to a new phone keeps the session
+  history and settings but leaves diagnostic logs behind.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="debug_logs" />
+        <exclude domain="file" path="debug_runs" />
+    </device-transfer>
+</data-extraction-rules>

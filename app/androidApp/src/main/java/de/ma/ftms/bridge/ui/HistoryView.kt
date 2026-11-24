@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,8 +31,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.ma.ftms.bridge.i18n.LocalStrings
+import de.ma.ftms.bridge.i18n.fmt
+import de.ma.ftms.bridge.i18n.formatNeutral
 import de.ma.ftms.bridge.i18n.Strings
 import de.ma.ftms.bridge.navigation.HistoryComponent
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.core.SensorReadings
 import de.ma.ftms.core.storage.SessionSampleRecord
 import de.ma.ftms.core.storage.WorkoutSessionRecord
 import java.text.DateFormat
@@ -70,15 +77,31 @@ private fun HistoryList(
     onClearHistory: () -> Unit,
 ) {
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
+    var typeFilter by rememberSaveable { mutableStateOf<EquipmentType?>(null) }
+    val recordedTypes = recordedEquipmentTypes(sessions)
+    val activeFilter = typeFilter?.takeIf { it in recordedTypes }
+    val shownSessions = filterSessionsByType(sessions, activeFilter)
 
-    if (sessions.isNotEmpty()) {
-        AllTimeSummary(strings = strings, totals = allTimeHistoryTotals(sessions))
+    if (recordedTypes.size > 1) {
+        EquipmentTypeFilter(
+            strings = strings,
+            types = recordedTypes,
+            selected = activeFilter,
+            onSelected = { typeFilter = it },
+        )
+    }
+    if (shownSessions.isNotEmpty()) {
+        AllTimeSummary(
+            strings = strings,
+            totals = allTimeHistoryTotals(shownSessions),
+            showAscent = shownSessions.any { it.equipmentType.showsClimb },
+        )
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(modifier = Modifier.weight(1f)) {
             Text(strings.history.storedSessions, fontWeight = FontWeight.Bold)
-            Text(strings.history.savedSessions(sessions.size), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(strings.history.savedSessions(shownSessions.size), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
         OutlinedButton(enabled = sessions.isNotEmpty(), onClick = { showClearConfirm = true }) {
             Text(strings.common.clear)
@@ -96,7 +119,7 @@ private fun HistoryList(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(sessions, key = { it.sessionId }) { session ->
+        items(shownSessions, key = { it.sessionId }) { session ->
             SessionCard(strings = strings, session = session, onClick = { onSelectSession(session.sessionId) })
         }
         item { VerticalGap() }
@@ -116,15 +139,41 @@ private fun HistoryList(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AllTimeSummary(strings: Strings, totals: AllTimeHistoryTotals) {
+private fun EquipmentTypeFilter(
+    strings: Strings,
+    types: List<EquipmentType>,
+    selected: EquipmentType?,
+    onSelected: (EquipmentType?) -> Unit,
+) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(
+            selected = selected == null,
+            onClick = { onSelected(null) },
+            label = { Text(strings.history.filterAll) },
+        )
+        types.forEach { type ->
+            FilterChip(
+                selected = selected == type,
+                onClick = { onSelected(type) },
+                label = { Text(equipmentTypeLabel(type, strings)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AllTimeSummary(strings: Strings, totals: AllTimeHistoryTotals, showAscent: Boolean) {
     Section(strings.history.allTime) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             MetricTile(strings.history.totalSessions, totals.sessionCount.toString(), Modifier.weight(1f))
-            MetricTile(strings.common.distance, "%.2f km".format(totals.totalDistanceM / 1000.0), Modifier.weight(1f))
+            MetricTile(strings.common.distance, strings.fmt("%.2f km", totals.totalDistanceM / 1000.0), Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricTile(strings.common.ascent, "%.1f m".format(totals.totalAscentM), Modifier.weight(1f))
+            if (showAscent) {
+                MetricTile(strings.common.ascent, strings.fmt("%.1f m", totals.totalAscentM), Modifier.weight(1f))
+            }
             MetricTile(strings.common.duration, formatDuration(totals.totalDurationMillis), Modifier.weight(1f))
         }
     }
@@ -138,7 +187,10 @@ private fun SessionCard(strings: Strings, session: WorkoutSessionRecord, onClick
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(sessionTitle(session), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(formatDuration(session.durationMillis), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "${equipmentTypeLabel(session.equipmentType, strings)} · ${formatDuration(session.durationMillis)}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             StatusBadge(
                 label = session.finalStatus,
@@ -146,8 +198,17 @@ private fun SessionCard(strings: Strings, session: WorkoutSessionRecord, onClick
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricTile(strings.common.distance, "%.2f km".format(session.finalDistanceM / 1000.0), Modifier.weight(1f))
-            MetricTile(strings.common.ascent, "%.1f m".format(session.finalAscentM), Modifier.weight(1f))
+            MetricTile(strings.common.distance, strings.fmt("%.2f km", session.finalDistanceM / 1000.0), Modifier.weight(1f))
+            if (session.equipmentType.showsClimb) {
+                MetricTile(strings.common.ascent, strings.fmt("%.1f m", session.finalAscentM), Modifier.weight(1f))
+            } else {
+                MetricTile(
+                    strings.common.averageSpeed,
+                    averageSpeedKmh(session.finalDistanceM, session.durationMillis)?.let { strings.fmt("%.1f km/h", it) }
+                        ?: strings.common.missingValue,
+                    Modifier.weight(1f),
+                )
+            }
         }
         StatusRow(strings.common.packets, session.packetCount.toString())
         StatusRow(strings.common.sends, strings.common.sendSummary(session.sendSuccessCount, session.sendFailureCount))
@@ -167,10 +228,12 @@ private fun HistoryDetail(
     val activeDurationMillis = samples.lastOrNull()?.offsetMillis ?: session.durationMillis
     val finalDistanceM = maxOf(session.finalDistanceM, samples.maxOfOrNull { it.smoothedDistanceM } ?: 0.0)
     val finalAscentM = maxOf(session.finalAscentM, samples.maxOfOrNull { it.ascentM } ?: 0.0)
+    val type = session.equipmentType
     val averagePace = formatAveragePace(finalDistanceM, activeDurationMillis)
     val averageIncline = averageInclinePct(samples)
     val historyMetrics = historyMetricTiles(
         strings = strings,
+        type = type,
         distanceM = finalDistanceM,
         ascentM = finalAscentM,
         activeDurationMillis = activeDurationMillis,
@@ -191,24 +254,21 @@ private fun HistoryDetail(
         }
         item {
             Section(sessionTitle(session)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricTile(strings.common.distance, "%.2f km".format(finalDistanceM / 1000.0), Modifier.weight(1f))
-                    MetricTile(strings.common.ascent, "%.1f m".format(finalAscentM), Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricTile(strings.common.duration, formatDuration(activeDurationMillis), Modifier.weight(1f))
-                    MetricTile(strings.common.packets, session.packetCount.toString(), Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricTile(strings.common.averagePace, averagePace ?: strings.common.missingValue, Modifier.weight(1f))
-                    MetricTile(
-                        strings.common.averageIncline,
-                        averageIncline?.let { "%.1f %%".format(it) } ?: strings.common.missingValue,
-                        Modifier.weight(1f),
-                    )
-                }
+                MetricGrid(
+                    historySummaryTiles(
+                        strings = strings,
+                        type = type,
+                        distanceM = finalDistanceM,
+                        ascentM = finalAscentM,
+                        activeDurationMillis = activeDurationMillis,
+                        packetCount = session.packetCount,
+                        averagePace = averagePace,
+                        averageIncline = averageIncline,
+                        samples = samples,
+                    ),
+                )
                 StatusRow(strings.common.status, session.finalStatus)
-                StatusRow(strings.common.treadmill, session.treadmillName ?: strings.common.missingValue)
+                StatusRow(equipmentTypeLabel(type, strings), session.treadmillName ?: strings.common.missingValue)
                 StatusRow(strings.common.garmin, session.garminName ?: strings.common.missingValue)
                 StatusRow(strings.common.sends, strings.common.sendSummary(session.sendSuccessCount, session.sendFailureCount))
                 if (session.lastError.isNotBlank()) {
@@ -235,14 +295,26 @@ private fun HistoryDetail(
                     MetricGrid(historyMetrics)
                 }
             }
+            val comparisonTiles = sourceComparisonTiles(strings, type, samples)
+            if (comparisonTiles.isNotEmpty()) {
+                item {
+                    Section(strings.history.sourceComparison) {
+                        MetricGrid(comparisonTiles)
+                    }
+                }
+            }
         } else {
             item { MetricChart(strings, strings.history.chartSpeed, "km/h", samples.points { speedKmh }) }
-            item { MetricChart(strings, strings.common.pace, "min/km", samples.points { speedKmh?.takeIf { it > 0.0 }?.let { speed -> 60.0 / speed } }, reverseY = true) }
-            item { MetricChart(strings, strings.common.averagePace, "min/km", samples.averagePacePoints(), reverseY = true) }
+            if (type.showsPace) {
+                item { MetricChart(strings, strings.common.pace, "min/km", samples.points { speedKmh?.takeIf { it > 0.0 }?.let { speed -> 60.0 / speed } }, reverseY = true) }
+                item { MetricChart(strings, strings.common.averagePace, "min/km", samples.averagePacePoints(), reverseY = true) }
+            }
             item { MetricChart(strings, strings.common.distance, "m", samples.points(monotonic = true) { smoothedDistanceM }) }
-            item { MetricChart(strings, strings.history.chartIncline, "%", samples.points { inclinePct }) }
-            item { MetricChart(strings, strings.common.averageIncline, "%", samples.averageInclinePoints()) }
-            item { MetricChart(strings, strings.history.chartAscent, "m", samples.points(monotonic = true) { ascentM }) }
+            if (type.showsClimb) {
+                item { MetricChart(strings, strings.history.chartIncline, "%", samples.points { inclinePct }) }
+                item { MetricChart(strings, strings.common.averageIncline, "%", samples.averageInclinePoints()) }
+                item { MetricChart(strings, strings.history.chartAscent, "m", samples.points(monotonic = true) { ascentM }) }
+            }
             if (samples.any { it.powerW != null }) {
                 item { MetricChart(strings, strings.history.chartPower, "W", samples.points { powerW?.toDouble() }) }
             }
@@ -251,6 +323,21 @@ private fun HistoryDetail(
             }
             if (samples.any { it.cadenceRpm != null || it.stepRateSpm != null }) {
                 item { MetricChart(strings, strings.history.chartCadenceStep, "rpm/spm", samples.points { cadenceRpm ?: stepRateSpm }) }
+            }
+            SourcedMetric.entries.forEach { metric ->
+                val equipmentPoints = samples.points { sourceValue(metric, equipment) }
+                val watchPoints = samples.points { sourceValue(metric, watch) }
+                if (equipmentPoints.size >= 2 && watchPoints.size >= 2) {
+                    item {
+                        MetricChart(
+                            strings = strings,
+                            title = "${sourcedMetricLabel(metric, strings)}: ${strings.history.sourceComparison}",
+                            unit = "",
+                            points = equipmentPoints,
+                            comparison = watchPoints,
+                        )
+                    }
+                }
             }
             if (samples.any { it.resistance != null }) {
                 item { MetricChart(strings, strings.history.chartResistance, "", samples.points { resistance }) }
@@ -328,8 +415,19 @@ private fun HistoryModeSwitch(
     }
 }
 
+/**
+ * A line chart of [points]. With [comparison], the watch's values are drawn as a second line over
+ * the equipment's and both get a legend.
+ */
 @Composable
-private fun MetricChart(strings: Strings, title: String, unit: String, points: List<ChartPoint>, reverseY: Boolean = false) {
+private fun MetricChart(
+    strings: Strings,
+    title: String,
+    unit: String,
+    points: List<ChartPoint>,
+    reverseY: Boolean = false,
+    comparison: List<ChartPoint> = emptyList(),
+) {
     Section(if (unit.isBlank()) title else "$title ($unit)") {
         if (points.size < 2) {
             Text(strings.history.notEnoughSamples, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -337,22 +435,34 @@ private fun MetricChart(strings: Strings, title: String, unit: String, points: L
         }
 
         val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-        val min = points.minOf { it.y }
-        val max = points.maxOf { it.y }
-        val startSeconds = points.first().x
-        val endSeconds = points.last().x
+        val allPoints = points + comparison
+        val min = allPoints.minOf { it.y }
+        val max = allPoints.maxOf { it.y }
+        val startSeconds = allPoints.minOf { it.x }
+        val endSeconds = allPoints.maxOf { it.x }
         val lineColor = MaterialTheme.colorScheme.primary
+        val comparisonColor = MaterialTheme.colorScheme.tertiary
         val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+        if (comparison.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("● ${strings.common.sourceEquipment}", color = lineColor, style = MaterialTheme.typography.bodySmall)
+                Text("● ${strings.common.sourceWatch}", color = comparisonColor, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text(strings.common.minValue(min), color = labelColor, style = MaterialTheme.typography.bodySmall)
             Text(strings.common.maxValue(max), color = labelColor, style = MaterialTheme.typography.bodySmall)
         }
         SimpleLineChart(
-            points = points,
+            series = listOfNotNull(
+                ChartSeries(points, lineColor),
+                comparison.takeIf { it.isNotEmpty() }?.let { ChartSeries(it, comparisonColor) },
+            ),
+            minX = startSeconds,
+            maxX = endSeconds,
             minY = min,
             maxY = max,
             reverseY = reverseY,
-            lineColor = lineColor,
             gridColor = gridColor,
             modifier = Modifier
                 .fillMaxWidth()
@@ -365,13 +475,16 @@ private fun MetricChart(strings: Strings, title: String, unit: String, points: L
     }
 }
 
+private class ChartSeries(val points: List<ChartPoint>, val color: Color)
+
 @Composable
 private fun SimpleLineChart(
-    points: List<ChartPoint>,
+    series: List<ChartSeries>,
+    minX: Double,
+    maxX: Double,
     minY: Double,
     maxY: Double,
     reverseY: Boolean,
-    lineColor: Color,
     gridColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -382,8 +495,6 @@ private fun SimpleLineChart(
         val bottomPadding = 8.dp.toPx()
         val chartWidth = (size.width - leftPadding - rightPadding).coerceAtLeast(1f)
         val chartHeight = (size.height - topPadding - bottomPadding).coerceAtLeast(1f)
-        val minX = points.first().x
-        val maxX = points.last().x
         val xRange = (maxX - minX).takeIf { it > 0.0 } ?: 1.0
 
         repeat(4) { index ->
@@ -396,21 +507,23 @@ private fun SimpleLineChart(
             )
         }
 
-        var previous: Offset? = null
-        points.forEach { point ->
-            val x = leftPadding + (((point.x - minX) / xRange).toFloat() * chartWidth)
-            val y = topPadding + (chartYFraction(point.y, minY, maxY, reverseY) * chartHeight)
-            val current = Offset(x, y)
-            previous?.let {
-                drawLine(
-                    color = lineColor,
-                    start = it,
-                    end = current,
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round,
-                )
+        series.forEach { line ->
+            var previous: Offset? = null
+            line.points.forEach { point ->
+                val x = leftPadding + (((point.x - minX) / xRange).toFloat() * chartWidth)
+                val y = topPadding + (chartYFraction(point.y, minY, maxY, reverseY) * chartHeight)
+                val current = Offset(x, y)
+                previous?.let {
+                    drawLine(
+                        color = line.color,
+                        start = it,
+                        end = current,
+                        strokeWidth = 2.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+                previous = current
             }
-            previous = current
         }
     }
 }
@@ -477,8 +590,61 @@ private fun List<SessionSampleRecord>.averageInclinePoints(): List<ChartPoint> {
 private fun averageInclinePct(samples: List<SessionSampleRecord>): Double? =
     samples.averageInclinePoints().lastOrNull()?.y
 
+/** The handful of values shown at the top of a session, chosen for its equipment type. */
+private fun historySummaryTiles(
+    strings: Strings,
+    type: EquipmentType,
+    distanceM: Double,
+    ascentM: Double,
+    activeDurationMillis: Long,
+    packetCount: Int,
+    averagePace: String?,
+    averageIncline: Double?,
+    samples: List<SessionSampleRecord>,
+): List<HistoryMetricTile> {
+    val missing = strings.common.missingValue
+    val distance = HistoryMetricTile(strings.common.distance, strings.fmt("%.2f km", distanceM / 1000.0))
+    val duration = HistoryMetricTile(strings.common.duration, formatDuration(activeDurationMillis))
+    val packets = HistoryMetricTile(strings.common.packets, packetCount.toString())
+    val ascent = HistoryMetricTile(strings.common.ascent, strings.fmt("%.1f m", ascentM))
+    val incline = HistoryMetricTile(
+        strings.common.averageIncline,
+        averageIncline?.let { strings.fmt("%.1f %%", it) } ?: missing,
+    )
+    val speed = HistoryMetricTile(
+        strings.common.averageSpeed,
+        averageSpeedKmh(distanceM, activeDurationMillis)?.let { strings.fmt("%.1f km/h", it) } ?: missing,
+    )
+    return when (type) {
+        EquipmentType.TREADMILL -> listOf(
+            distance,
+            ascent,
+            duration,
+            packets,
+            HistoryMetricTile(strings.common.averagePace, averagePace ?: missing),
+            incline,
+        )
+        EquipmentType.INDOOR_BIKE -> listOf(
+            distance,
+            duration,
+            speed,
+            HistoryMetricTile(
+                strings.common.averagePower,
+                averagePowerWatts(samples)?.let { strings.fmt("%.0f W", it) } ?: missing,
+            ),
+            HistoryMetricTile(
+                strings.common.averageCadenceStep,
+                averageCadenceOrStep(samples)?.let { strings.fmt("%.0f", it) } ?: missing,
+            ),
+            packets,
+        )
+        EquipmentType.CROSS_TRAINER -> listOf(distance, ascent, duration, packets, speed, incline)
+    }
+}
+
 private fun historyMetricTiles(
     strings: Strings,
+    type: EquipmentType,
     distanceM: Double,
     ascentM: Double,
     activeDurationMillis: Long,
@@ -488,29 +654,110 @@ private fun historyMetricTiles(
 ): List<HistoryMetricTile> {
     val missing = strings.common.missingValue
     val metrics = mutableListOf(
-        HistoryMetricTile(strings.common.distance, "%.2f km".format(distanceM / 1000.0)),
-        HistoryMetricTile(strings.common.ascent, "%.1f m".format(ascentM)),
+        HistoryMetricTile(strings.common.distance, strings.fmt("%.2f km", distanceM / 1000.0)),
         HistoryMetricTile(strings.common.duration, formatDuration(activeDurationMillis)),
         HistoryMetricTile(
             strings.common.averageSpeed,
-            averageSpeedKmh(distanceM, activeDurationMillis)?.let { "%.2f km/h".format(it) } ?: missing,
-        ),
-        HistoryMetricTile(strings.common.averagePace, averagePace ?: missing),
-        HistoryMetricTile(
-            strings.common.averageIncline,
-            averageIncline?.let { "%.1f %%".format(it) } ?: missing,
-        ),
-        HistoryMetricTile(
-            strings.common.averageAscentRate,
-            averageAscentRateMetersPerMinute(ascentM, activeDurationMillis)?.let { "%.1f m/min".format(it) } ?: missing,
+            averageSpeedKmh(distanceM, activeDurationMillis)?.let { strings.fmt("%.2f km/h", it) } ?: missing,
         ),
     )
-    averagePowerWatts(samples)?.let { metrics += HistoryMetricTile(strings.common.averagePower, "%.0f W".format(it)) }
-    averageHeartRateBpm(samples)?.let { metrics += HistoryMetricTile(strings.common.averageHeartRate, "%.0f bpm".format(it)) }
-    averageCadenceOrStep(samples)?.let { metrics += HistoryMetricTile(strings.common.averageCadenceStep, "%.1f".format(it)) }
-    averageResistance(samples)?.let { metrics += HistoryMetricTile(strings.common.averageResistance, "%.1f".format(it)) }
+    if (type.showsPace) {
+        metrics += HistoryMetricTile(strings.common.averagePace, averagePace ?: missing)
+    }
+    if (type.showsClimb) {
+        metrics.add(1, HistoryMetricTile(strings.common.ascent, strings.fmt("%.1f m", ascentM)))
+        metrics += HistoryMetricTile(
+            strings.common.averageIncline,
+            averageIncline?.let { strings.fmt("%.1f %%", it) } ?: missing,
+        )
+        metrics += HistoryMetricTile(
+            strings.common.averageAscentRate,
+            averageAscentRateMetersPerMinute(ascentM, activeDurationMillis)?.let { strings.fmt("%.1f m/min", it) } ?: missing,
+        )
+    }
+    averagePowerWatts(samples)?.let { metrics += HistoryMetricTile(strings.common.averagePower, strings.fmt("%.0f W", it)) }
+    averageHeartRateBpm(samples)?.let { metrics += HistoryMetricTile(strings.common.averageHeartRate, strings.fmt("%.0f bpm", it)) }
+    averageCadenceOrStep(samples)?.let { metrics += HistoryMetricTile(strings.common.averageCadenceStep, strings.fmt("%.1f", it)) }
+    averageResistance(samples)?.let { metrics += HistoryMetricTile(strings.common.averageResistance, strings.fmt("%.1f", it)) }
     return metrics
 }
+
+/** The averages of one value from both sources, over the samples where both delivered it. */
+internal data class SourceComparison(
+    val equipmentAverage: Double,
+    val watchAverage: Double,
+) {
+    /** How far the watch is above (positive) or below the equipment, in percent. */
+    val differencePercent: Double?
+        get() = if (equipmentAverage == 0.0) null else (watchAverage - equipmentAverage) / equipmentAverage * 100.0
+}
+
+internal fun sourceValue(metric: SourcedMetric, readings: SensorReadings?): Double? =
+    when (metric) {
+        SourcedMetric.HEART_RATE -> readings?.heartRateBpm?.toDouble()
+        SourcedMetric.POWER -> readings?.powerW?.toDouble()
+        SourcedMetric.CADENCE -> readings?.cadenceRpm
+    }
+
+/**
+ * Compares the two sources of [metric]. Only samples where both have a value count, so a source
+ * that joined late or dropped out does not shift its average. Null if there is no such sample.
+ */
+internal fun compareSources(samples: List<SessionSampleRecord>, metric: SourcedMetric): SourceComparison? {
+    val pairs = samples.mapNotNull { sample ->
+        val equipment = sourceValue(metric, sample.equipment) ?: return@mapNotNull null
+        val watch = sourceValue(metric, sample.watch) ?: return@mapNotNull null
+        equipment to watch
+    }
+    if (pairs.isEmpty()) {
+        return null
+    }
+
+    return SourceComparison(
+        equipmentAverage = pairs.map { it.first }.average(),
+        watchAverage = pairs.map { it.second }.average(),
+    )
+}
+
+private fun sourceComparisonTiles(
+    strings: Strings,
+    type: EquipmentType,
+    samples: List<SessionSampleRecord>,
+): List<HistoryMetricTile> =
+    SourcedMetric.entries.flatMap { metric ->
+        val comparison = compareSources(samples, metric) ?: return@flatMap emptyList()
+        val label = sourcedMetricLabel(metric, strings)
+        val unit = when (metric) {
+            SourcedMetric.HEART_RATE -> "bpm"
+            SourcedMetric.POWER -> "W"
+            SourcedMetric.CADENCE -> if (type.showsPace) "spm" else "rpm"
+        }
+        listOf(
+            HistoryMetricTile(
+                "$label · ${strings.common.sourceEquipment}",
+                strings.fmt("%.0f $unit", comparison.equipmentAverage),
+            ),
+            HistoryMetricTile(
+                "$label · ${strings.common.sourceWatch}",
+                comparison.differencePercent
+                    ?.let { strings.fmt("%.0f $unit (%+.1f %%)", comparison.watchAverage, it) }
+                    ?: strings.fmt("%.0f $unit", comparison.watchAverage),
+            ),
+        )
+    }
+
+internal val WorkoutSessionRecord.equipmentType: EquipmentType
+    get() = EquipmentType.fromMachineKind(equipmentKind)
+
+/** The equipment types that occur in [sessions], in the order the app lists types. */
+internal fun recordedEquipmentTypes(sessions: List<WorkoutSessionRecord>): List<EquipmentType> =
+    EquipmentType.entries.filter { type -> sessions.any { it.equipmentType == type } }
+
+internal fun filterSessionsByType(
+    sessions: List<WorkoutSessionRecord>,
+    type: EquipmentType?,
+): List<WorkoutSessionRecord> =
+    if (type == null) sessions else sessions.filter { it.equipmentType == type }
 
 internal fun averageSpeedKmh(distanceM: Double, durationMillis: Long): Double? {
     if (distanceM <= 0.0 || durationMillis <= 0L) {
@@ -562,9 +809,9 @@ private fun formatDuration(durationMillis: Long): String {
     val minutes = (totalSeconds % 3_600L) / 60L
     val seconds = totalSeconds % 60L
     return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
+        formatNeutral("%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        "%02d:%02d".format(minutes, seconds)
+        formatNeutral("%02d:%02d", minutes, seconds)
     }
 }
 

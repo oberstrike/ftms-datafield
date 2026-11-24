@@ -1,6 +1,10 @@
 package de.ma.ftms.bridge.ui
 
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.SourcedMetric
 import de.ma.ftms.core.DistanceSource
+import de.ma.ftms.core.FtmsMachineKind
+import de.ma.ftms.core.SensorReadings
 import de.ma.ftms.core.storage.SessionSampleRecord
 import de.ma.ftms.core.storage.WorkoutSessionRecord
 import kotlin.test.Test
@@ -171,4 +175,63 @@ class HistoryMetricCalculationsTest {
             finalSpeedKmh = 0.0,
             updatedAtMillis = updatedAtMillis,
         )
+
+    @Test
+    fun comparesEquipmentAndWatchOverTheSamplesBothDelivered() {
+        val samples = listOf(
+            sample().copy(equipment = SensorReadings(powerW = 200), watch = SensorReadings(powerW = 210)),
+            sample().copy(equipment = SensorReadings(powerW = 100), watch = SensorReadings(powerW = 105)),
+            // Only one source each: must not shift either average.
+            sample().copy(equipment = SensorReadings(powerW = 900)),
+            sample().copy(watch = SensorReadings(powerW = 5, heartRateBpm = 150)),
+        )
+
+        val power = compareSources(samples, SourcedMetric.POWER)
+
+        assertEquals(150.0, power?.equipmentAverage)
+        assertEquals(157.5, power?.watchAverage)
+        assertEquals(5.0, power?.differencePercent)
+        assertNull(compareSources(samples, SourcedMetric.HEART_RATE))
+        assertNull(compareSources(listOf(sample(powerW = 180)), SourcedMetric.POWER))
+    }
+
+    @Test
+    fun givesNoPercentageAgainstAnEquipmentAverageOfZero() {
+        val samples = listOf(sample().copy(equipment = SensorReadings(powerW = 0), watch = SensorReadings(powerW = 12)))
+
+        assertNull(compareSources(samples, SourcedMetric.POWER)?.differencePercent)
+    }
+
+    @Test
+    fun listsAndFiltersSessionsByEquipmentType() {
+        val run = WorkoutSessionRecord(
+            sessionId = "run",
+            startedAtMillis = 0L,
+            stoppedAtMillis = 60_000L,
+            finalStatus = "stopped",
+            treadmillName = null,
+            treadmillAddress = null,
+            garminName = null,
+            garminId = null,
+            packetCount = 0,
+            sendSuccessCount = 0,
+            sendFailureCount = 0,
+            lastError = "",
+            finalDistanceM = 1_000.0,
+            finalAscentM = 10.0,
+            finalSpeedKmh = 0.0,
+            updatedAtMillis = 60_000L,
+        )
+        val ride = run.copy(sessionId = "ride", equipmentKind = FtmsMachineKind.INDOOR_BIKE, finalAscentM = 0.0)
+        val unknown = run.copy(sessionId = "old", equipmentKind = FtmsMachineKind.UNKNOWN)
+        val sessions = listOf(run, ride, unknown)
+
+        assertEquals(EquipmentType.INDOOR_BIKE, ride.equipmentType)
+        assertEquals(EquipmentType.TREADMILL, unknown.equipmentType)
+        assertEquals(listOf(EquipmentType.TREADMILL, EquipmentType.INDOOR_BIKE), recordedEquipmentTypes(sessions))
+        assertEquals(listOf(ride), filterSessionsByType(sessions, EquipmentType.INDOOR_BIKE))
+        assertEquals(listOf(run, unknown), filterSessionsByType(sessions, EquipmentType.TREADMILL))
+        assertEquals(sessions, filterSessionsByType(sessions, null))
+        assertEquals(1, allTimeHistoryTotals(filterSessionsByType(sessions, EquipmentType.INDOOR_BIKE)).sessionCount)
+    }
 }

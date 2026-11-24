@@ -31,6 +31,12 @@ data class BridgeMessage(
     }
 
     companion object {
+        /**
+         * Control message of a bridge that runs without data from the equipment: it is connecting
+         * or the equipment is silent. The data field then leaves the equipment to the phone.
+         */
+        const val TYPE_WAIT = "ftms_wait"
+
         fun stopMap(sequence: Int): Map<String, Any> =
             mapOf(
                 "v" to 2,

@@ -17,3 +17,12 @@ fun resolveStrings(language: AppLanguage, localeTag: String = Locale.getDefault(
     }
 
 private fun String.primaryLanguage(): String = substringBefore('-').substringBefore('_')
+
+/**
+ * Formats with the locale of the displayed language instead of the JVM default, so numbers
+ * match the UI language (decimal separator, digits) regardless of the system locale.
+ */
+fun Strings.fmt(pattern: String, vararg args: Any?): String = String.format(locale, pattern, *args)
+
+/** Locale-neutral formatting for clock-style values (mm:ss) and machine-readable text. */
+fun formatNeutral(pattern: String, vararg args: Any?): String = String.format(Locale.ROOT, pattern, *args)

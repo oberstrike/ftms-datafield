@@ -19,6 +19,9 @@ import de.ma.ftms.bridge.i18n.Strings
 import de.ma.ftms.bridge.runtime.BridgeRuntime
 import de.ma.ftms.bridge.runtime.BridgeSettings
 import de.ma.ftms.bridge.runtime.BridgeUiState
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.ValueSource
 import kotlinx.coroutines.flow.StateFlow
 
 interface RootComponent {
@@ -40,6 +43,9 @@ interface DashboardComponent {
     fun onStartBridge(context: Context)
     fun onPauseBridge()
     fun onStopBridge()
+    fun onSetTargetPower(watts: Int)
+    fun onStepTargetPower(direction: Int)
+    fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource)
 }
 
 interface DevicesComponent {
@@ -47,6 +53,7 @@ interface DevicesComponent {
     fun onToggleScan()
     fun onRefreshGarminDevices()
     fun onSelectTreadmill(address: String)
+    fun onSelectEquipmentType(type: EquipmentType)
     fun onSelectGarmin(id: Long)
 }
 
@@ -77,6 +84,8 @@ interface SettingsComponent {
         data object Bridge : Child()
         data object Power : Child()
         data object Dashboard : Child()
+        data object IndoorCycling : Child()
+        data object Sources : Child()
         data object Timing : Child()
         data object Language : Child()
         data object Debug : Child()
@@ -122,6 +131,10 @@ private class DefaultDashboardComponent(
     override fun onStartBridge(context: Context) = BridgeRuntime.startBridge(context)
     override fun onPauseBridge() = BridgeRuntime.pauseBridge()
     override fun onStopBridge() = BridgeRuntime.stopBridge()
+    override fun onSetTargetPower(watts: Int) = BridgeRuntime.setTargetPower(watts)
+    override fun onStepTargetPower(direction: Int) = BridgeRuntime.stepTargetPower(direction)
+    override fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource) =
+        BridgeRuntime.selectSensorSource(metric, source)
 }
 
 private class DefaultDevicesComponent(
@@ -134,6 +147,7 @@ private class DefaultDevicesComponent(
     }
     override fun onRefreshGarminDevices() = BridgeRuntime.refreshGarminDevices()
     override fun onSelectTreadmill(address: String) = BridgeRuntime.selectTreadmill(address)
+    override fun onSelectEquipmentType(type: EquipmentType) = BridgeRuntime.selectEquipmentType(type)
     override fun onSelectGarmin(id: Long) = BridgeRuntime.selectGarmin(id)
 }
 
@@ -183,6 +197,8 @@ private class DefaultSettingsComponent(
             SettingsConfig.Bridge -> SettingsComponent.Child.Bridge
             SettingsConfig.Power -> SettingsComponent.Child.Power
             SettingsConfig.Dashboard -> SettingsComponent.Child.Dashboard
+            SettingsConfig.IndoorCycling -> SettingsComponent.Child.IndoorCycling
+            SettingsConfig.Sources -> SettingsComponent.Child.Sources
             SettingsConfig.Timing -> SettingsComponent.Child.Timing
             SettingsConfig.Language -> SettingsComponent.Child.Language
             SettingsConfig.Debug -> SettingsComponent.Child.Debug
@@ -195,6 +211,8 @@ sealed class SettingsConfig {
     data object Overview : SettingsConfig()
     data object Bridge : SettingsConfig()
     data object Power : SettingsConfig()
+    data object IndoorCycling : SettingsConfig()
+    data object Sources : SettingsConfig()
     data object Dashboard : SettingsConfig()
     data object Timing : SettingsConfig()
     data object Language : SettingsConfig()

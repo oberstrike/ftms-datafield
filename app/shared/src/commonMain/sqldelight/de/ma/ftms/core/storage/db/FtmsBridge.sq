@@ -14,7 +14,9 @@ CREATE TABLE workout_session (
     final_distance_m REAL NOT NULL DEFAULT 0.0,
     final_ascent_m REAL NOT NULL DEFAULT 0.0,
     final_speed_kmh REAL NOT NULL DEFAULT 0.0,
-    updated_at_millis INTEGER NOT NULL
+    updated_at_millis INTEGER NOT NULL,
+    -- Equipment type the user had selected for the session (FtmsMachineKind); 2 is a treadmill.
+    equipment_kind INTEGER NOT NULL DEFAULT 2
 );
 
 CREATE INDEX idx_workout_session_started ON workout_session(started_at_millis DESC);
@@ -42,6 +44,12 @@ CREATE TABLE session_sample (
     remaining_s INTEGER,
     parse_error TEXT,
     distance_source TEXT NOT NULL,
+    equipment_power_w INTEGER,
+    equipment_heart_rate_bpm INTEGER,
+    equipment_cadence_rpm REAL,
+    watch_power_w INTEGER,
+    watch_heart_rate_bpm INTEGER,
+    watch_cadence_rpm REAL,
     FOREIGN KEY(session_id) REFERENCES workout_session(session_id) ON DELETE CASCADE
 );
 
@@ -92,8 +100,9 @@ INSERT INTO workout_session(
     final_distance_m,
     final_ascent_m,
     final_speed_kmh,
-    updated_at_millis
-) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, 0, 0, '', 0.0, 0.0, 0.0, ?);
+    updated_at_millis,
+    equipment_kind
+) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, 0, 0, '', 0.0, 0.0, 0.0, ?, ?);
 
 insertFinishedSession:
 INSERT INTO workout_session(
@@ -112,8 +121,9 @@ INSERT INTO workout_session(
     final_distance_m,
     final_ascent_m,
     final_speed_kmh,
-    updated_at_millis
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    updated_at_millis,
+    equipment_kind
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 insertSample:
 INSERT INTO session_sample(
@@ -136,8 +146,14 @@ INSERT INTO session_sample(
     elapsed_s,
     remaining_s,
     parse_error,
-    distance_source
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    distance_source,
+    equipment_power_w,
+    equipment_heart_rate_bpm,
+    equipment_cadence_rpm,
+    watch_power_w,
+    watch_heart_rate_bpm,
+    watch_cadence_rpm
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateSessionStats:
 UPDATE workout_session

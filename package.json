@@ -6,6 +6,6 @@
     "nx": "nx"
   },
   "devDependencies": {
-    "nx": "^22.7.2"
+    "nx": "^24.0.6"
   }
 }

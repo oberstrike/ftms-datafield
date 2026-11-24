@@ -4,14 +4,12 @@ import de.ma.ftms.bridge.i18n.AppLanguage
 import de.ma.ftms.bridge.runtime.BridgeSettings
 import de.ma.ftms.bridge.runtime.DashboardChartTimespan
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
-import de.ma.ftms.bridge.runtime.GarminHeartRate
-import de.ma.ftms.bridge.runtime.HeartRateSource
+import de.ma.ftms.bridge.runtime.EquipmentType
 import de.ma.ftms.bridge.runtime.PowerSource
+import de.ma.ftms.bridge.runtime.SensorSources
 import de.ma.ftms.bridge.runtime.toDashboardChartTimespan
-import de.ma.ftms.bridge.runtime.toHeartRateSource
 import de.ma.ftms.bridge.runtime.toPowerSource
 import de.ma.ftms.bridge.runtime.treadmillPowerWatts
-import de.ma.ftms.bridge.runtime.withResolvedHeartRate
 import de.ma.ftms.bridge.runtime.withResolvedPower
 import de.ma.ftms.core.TreadmillSample
 import kotlin.test.Test
@@ -25,18 +23,21 @@ class BridgeSettingsTest {
         val settings = BridgeSettings()
 
         assertTrue(settings.autoReconnect)
+        assertTrue(!settings.autoStart)
+        assertEquals(listOf(100, 150, 200, 250), settings.targetPowerPresets)
+        assertEquals(10, settings.targetPowerStepWatts)
         assertEquals(15, settings.packetTimeoutSeconds)
         assertEquals(1_000L, settings.sendIntervalMillis)
         assertEquals(5_000, settings.maxLogEntries)
         assertTrue(!settings.debugLoggingEnabled)
         assertEquals(AppLanguage.SYSTEM_DEFAULT, settings.language)
         assertTrue(settings.showOpenAppNotificationAction)
-        assertTrue(DashboardMetricKey.PACE in settings.dashboardMetrics)
-        assertTrue(DashboardMetricKey.ASCENT_RATE in settings.dashboardMetrics)
-        assertTrue(DashboardMetricKey.PACE in settings.dashboardGraphs)
-        assertTrue(DashboardMetricKey.ASCENT_RATE in settings.dashboardGraphs)
+        assertTrue(DashboardMetricKey.PACE in settings.dashboardLayout(EquipmentType.TREADMILL).metrics)
+        assertTrue(DashboardMetricKey.ASCENT_RATE in settings.dashboardLayout(EquipmentType.TREADMILL).metrics)
+        assertTrue(DashboardMetricKey.PACE in settings.dashboardLayout(EquipmentType.TREADMILL).graphs)
+        assertTrue(DashboardMetricKey.ASCENT_RATE in settings.dashboardLayout(EquipmentType.TREADMILL).graphs)
         assertEquals(DashboardChartTimespan.MINUTES_10, settings.dashboardChartTimespan)
-        assertEquals(HeartRateSource.GARMIN, settings.heartRateSource)
+        assertEquals(SensorSources(), settings.sensorSources(EquipmentType.TREADMILL))
         assertTrue(!settings.powerCalculationEnabled)
         assertEquals(PowerSource.FTMS_PREFERRED, settings.powerSource)
         assertNull(settings.powerBodyMassKg)
@@ -53,13 +54,6 @@ class BridgeSettingsTest {
         assertEquals(DashboardChartTimespan.MINUTES_5, "MINUTES_5".toDashboardChartTimespan())
         assertEquals(DashboardChartTimespan.MINUTES_10, null.toDashboardChartTimespan())
         assertEquals(DashboardChartTimespan.MINUTES_10, "not-a-timespan".toDashboardChartTimespan())
-    }
-
-    @Test
-    fun parsesHeartRateSourceWithGarminDefaultFallback() {
-        assertEquals(HeartRateSource.MACHINE, "MACHINE".toHeartRateSource())
-        assertEquals(HeartRateSource.GARMIN, null.toHeartRateSource())
-        assertEquals(HeartRateSource.GARMIN, "not-a-source".toHeartRateSource())
     }
 
     @Test
@@ -98,23 +92,5 @@ class BridgeSettingsTest {
         assertEquals(271, ftmsPower.withResolvedPower(calculated).powerW)
         assertEquals(220, ftmsPower.withResolvedPower(calculated.copy(powerBodyMassKg = null)).powerW)
         assertNull(missingPower.withResolvedPower(ftmsPreferred.copy(powerCalculationEnabled = false)).powerW)
-    }
-
-    @Test
-    fun resolvesHeartRateFromSelectedSource() {
-        val machineSample = TreadmillSample(heartRateBpm = 122)
-        val freshGarmin = GarminHeartRate(bpm = 144, timestampMillis = 1_000L)
-
-        assertEquals(
-            122,
-            machineSample.withResolvedHeartRate(HeartRateSource.MACHINE, freshGarmin, nowMillis = 2_000L).heartRateBpm,
-        )
-        assertEquals(
-            144,
-            machineSample.withResolvedHeartRate(HeartRateSource.GARMIN, freshGarmin, nowMillis = 2_000L).heartRateBpm,
-        )
-        assertNull(
-            machineSample.withResolvedHeartRate(HeartRateSource.GARMIN, freshGarmin, nowMillis = 8_000L).heartRateBpm,
-        )
     }
 }

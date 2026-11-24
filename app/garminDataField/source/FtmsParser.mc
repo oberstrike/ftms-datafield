@@ -100,12 +100,51 @@ module FtmsParser {
         return s;
     }
 
+    // Width in bytes of the pace fields of Treadmill Data. The current GATT Specification
+    // Supplement defines them as uint16, the original FTMS 1.0 definition as uint8, and machines
+    // of both kinds exist. The variant whose total length matches the notification is used;
+    // uint16 is the default. Keep in sync with FtmsTreadmillParser.kt in app/shared.
+    function treadmillPaceFieldWidth(flags, recordLength) {
+        if (!hasFlag(flags, 5) && !hasFlag(flags, 6)) {
+            return 2;
+        }
+
+        if (recordLength == treadmillRecordLength(flags, 2)) {
+            return 2;
+        }
+
+        if (recordLength == treadmillRecordLength(flags, 1)) {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    function treadmillRecordLength(flags, paceWidth) {
+        var length = 2;
+        if (!hasFlag(flags, 0)) { length += 2; }
+        if (hasFlag(flags, 1)) { length += 2; }
+        if (hasFlag(flags, 2)) { length += 3; }
+        if (hasFlag(flags, 3)) { length += 4; }
+        if (hasFlag(flags, 4)) { length += 4; }
+        if (hasFlag(flags, 5)) { length += paceWidth; }
+        if (hasFlag(flags, 6)) { length += paceWidth; }
+        if (hasFlag(flags, 7)) { length += 5; }
+        if (hasFlag(flags, 8)) { length += 1; }
+        if (hasFlag(flags, 9)) { length += 1; }
+        if (hasFlag(flags, 10)) { length += 2; }
+        if (hasFlag(flags, 11)) { length += 2; }
+        if (hasFlag(flags, 12)) { length += 4; }
+        return length;
+    }
+
     function parseTreadmill(bytes) {
         var s = new FtmsSample(FtmsMachineKind.TREADMILL);
 
         if (!canRead(bytes, 0, 2)) { return s; }
 
         var flags = u16(bytes, 0);
+        var paceWidth = treadmillPaceFieldWidth(flags, bytes.size());
         var p = 2;
         s.rawFlags = flags;
 
@@ -148,16 +187,16 @@ module FtmsParser {
             s.elevationSource = 1;
         }
 
-        // Bit 5: Instantaneous Pace, uint16
+        // Bit 5: Instantaneous Pace, uint16 (uint8 on older machines, see treadmillPaceFieldWidth)
         if (hasFlag(flags, 5)) {
-            if (!canRead(bytes, p, 2)) { return s; }
-            p += 2;
+            if (!canRead(bytes, p, paceWidth)) { return s; }
+            p += paceWidth;
         }
 
-        // Bit 6: Average Pace, uint16
+        // Bit 6: Average Pace, same width as Instantaneous Pace
         if (hasFlag(flags, 6)) {
-            if (!canRead(bytes, p, 2)) { return s; }
-            p += 2;
+            if (!canRead(bytes, p, paceWidth)) { return s; }
+            p += paceWidth;
         }
 
         // Bit 7: Expended Energy: total uint16 + per hour uint16 + per minute uint8

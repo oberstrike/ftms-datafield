@@ -1,0 +1,6 @@
+ALTER TABLE session_sample ADD COLUMN equipment_power_w INTEGER;
+ALTER TABLE session_sample ADD COLUMN equipment_heart_rate_bpm INTEGER;
+ALTER TABLE session_sample ADD COLUMN equipment_cadence_rpm REAL;
+ALTER TABLE session_sample ADD COLUMN watch_power_w INTEGER;
+ALTER TABLE session_sample ADD COLUMN watch_heart_rate_bpm INTEGER;
+ALTER TABLE session_sample ADD COLUMN watch_cadence_rpm REAL;

@@ -74,6 +74,7 @@ class FtmsGenericParserTest {
         assertEquals(FtmsMachineKind.TREADMILL, sample.kind)
         assertEquals(3.6, sample.speedKmh)
         assertEquals(164.0, sample.stepRateSpm)
-        assertEquals(1000, sample.distanceM)
+        // 1000 tenths of a metre.
+        assertEquals(100, sample.distanceM)
     }
 }

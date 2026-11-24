@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -20,7 +21,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,10 +43,24 @@ import de.ma.ftms.bridge.i18n.LocalStrings
 import de.ma.ftms.bridge.i18n.displayLabel
 import de.ma.ftms.bridge.navigation.SettingsComponent
 import de.ma.ftms.bridge.navigation.SettingsConfig
+import de.ma.ftms.bridge.runtime.DEFAULT_TARGET_POWER_PRESETS
 import de.ma.ftms.bridge.runtime.DashboardChartTimespan
-import de.ma.ftms.bridge.runtime.DEFAULT_DASHBOARD_GRAPHS
-import de.ma.ftms.bridge.runtime.DashboardMetricKey
-import de.ma.ftms.bridge.runtime.HeartRateSource
+import de.ma.ftms.bridge.runtime.MAX_TARGET_POWER_PRESETS
+import de.ma.ftms.bridge.runtime.TARGET_POWER_PRESET_RANGE
+import de.ma.ftms.bridge.runtime.TARGET_POWER_STEP_OPTIONS
+import de.ma.ftms.bridge.runtime.isNewTargetPowerPresetAllowed
+import de.ma.ftms.bridge.runtime.sanitizeTargetPowerPresets
+import de.ma.ftms.bridge.runtime.EquipmentType
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import de.ma.ftms.bridge.ble.advertisePermissions
+import de.ma.ftms.bridge.ble.hasAdvertisePermission
+import de.ma.ftms.bridge.runtime.BridgeRuntime
+import de.ma.ftms.bridge.runtime.dashboardGraphOptions
+import de.ma.ftms.bridge.runtime.dashboardMetricOptions
+import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.ValueSource
 import de.ma.ftms.bridge.runtime.PowerSource
 
 @Composable
@@ -54,6 +72,8 @@ fun SettingsView(component: SettingsComponent) {
             SettingsComponent.Child.Bridge -> BridgeSettingsView(component)
             SettingsComponent.Child.Power -> PowerSettingsView(component)
             SettingsComponent.Child.Dashboard -> DashboardSettingsView(component)
+            SettingsComponent.Child.IndoorCycling -> IndoorCyclingSettingsView(component)
+            SettingsComponent.Child.Sources -> SourcesSettingsView(component)
             SettingsComponent.Child.Timing -> TimingSettingsView(component)
             SettingsComponent.Child.Language -> LanguageSettingsView(component)
             SettingsComponent.Child.Debug -> DebugSettingsView(component)
@@ -91,6 +111,20 @@ private fun SettingsOverviewView(component: SettingsComponent) {
                     title = strings.settings.dashboard,
                     subtitle = strings.settings.dashboardSubtitle,
                     onClick = { component.navigateTo(SettingsConfig.Dashboard) },
+                )
+            }
+            item {
+                SettingsDestinationCard(
+                    title = strings.settings.dataSources,
+                    subtitle = strings.settings.dataSourcesSubtitle,
+                    onClick = { component.navigateTo(SettingsConfig.Sources) },
+                )
+            }
+            item {
+                SettingsDestinationCard(
+                    title = strings.settings.indoorCycling,
+                    subtitle = strings.settings.indoorCyclingSubtitle,
+                    onClick = { component.navigateTo(SettingsConfig.IndoorCycling) },
                 )
             }
             item {
@@ -188,6 +222,12 @@ private fun BridgeSettingsView(component: SettingsComponent) {
     val state by component.state.collectAsStateWithLifecycle()
     val settings = state.settings
     val strings = LocalStrings.current
+    val context = LocalContext.current
+    val advertisePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        BridgeRuntime.refreshPermissionState()
+    }
 
     SettingsPageScaffold(title = strings.settings.bridgeBehavior, component = component) {
         Section(strings.settings.bridgeBehavior) {
@@ -200,20 +240,46 @@ private fun BridgeSettingsView(component: SettingsComponent) {
                 },
             )
             SettingsToggleRow(
+                title = strings.settings.autoStart,
+                subtitle = strings.settings.autoStartSubtitle,
+                checked = settings.autoStart,
+                onCheckedChange = {
+                    component.onUpdateSettings(settings.copy(autoStart = it))
+                },
+            )
+            SettingsToggleRow(
+                title = strings.settings.autoStop,
+                subtitle = strings.settings.autoStopSubtitle,
+                checked = settings.autoStop,
+                onCheckedChange = {
+                    component.onUpdateSettings(settings.copy(autoStop = it))
+                },
+            )
+            SettingsToggleRow(
+                title = strings.settings.followWatchTimer,
+                subtitle = strings.settings.followWatchTimerSubtitle,
+                checked = settings.followWatchTimer,
+                onCheckedChange = {
+                    component.onUpdateSettings(settings.copy(followWatchTimer = it))
+                },
+            )
+            SettingsToggleRow(
+                title = strings.settings.virtualFootPod,
+                subtitle = strings.settings.virtualFootPodSubtitle,
+                checked = settings.virtualFootPod,
+                onCheckedChange = {
+                    component.onUpdateSettings(settings.copy(virtualFootPod = it))
+                    if (it && !hasAdvertisePermission(context)) {
+                        advertisePermissionLauncher.launch(advertisePermissions())
+                    }
+                },
+            )
+            SettingsToggleRow(
                 title = strings.settings.notificationShortcut,
                 subtitle = strings.settings.notificationShortcutSubtitle,
                 checked = settings.showOpenAppNotificationAction,
                 onCheckedChange = {
                     component.onUpdateSettings(settings.copy(showOpenAppNotificationAction = it))
-                },
-            )
-            ChoiceRow(
-                title = strings.settings.heartRateSource,
-                selected = settings.heartRateSource,
-                options = HeartRateSource.entries.toList(),
-                label = { it.label(strings) },
-                onSelected = {
-                    component.onUpdateSettings(settings.copy(heartRateSource = it))
                 },
             )
         }
@@ -277,8 +343,20 @@ private fun DashboardSettingsView(component: SettingsComponent) {
     val settings = state.settings
     val strings = LocalStrings.current
 
+    var editedType by rememberSaveable { mutableStateOf(state.selectedEquipmentType) }
+    val layout = settings.dashboardLayout(editedType)
+
     SettingsPageScaffold(title = strings.settings.dashboard, component = component) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.devices.equipmentType) {
+                ChoiceRow(
+                    title = strings.settings.dashboardEquipmentType,
+                    selected = editedType,
+                    options = EquipmentType.entries.toList(),
+                    label = { equipmentTypeLabel(it, strings) },
+                    onSelected = { editedType = it },
+                )
+            }
             Section(strings.settings.dashboardMetrics) {
                 Text(
                     strings.settings.dashboardMetricsSubtitle,
@@ -286,12 +364,12 @@ private fun DashboardSettingsView(component: SettingsComponent) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 MultiChoiceRow(
-                    selected = settings.dashboardMetrics,
-                    options = DashboardMetricKey.entries.toList(),
+                    selected = layout.metrics,
+                    options = dashboardMetricOptions(editedType),
                     label = { it.label(strings) },
                     minimumSelectionText = strings.settings.keepOneDashboardOptionSelected,
                     onSelected = {
-                        component.onUpdateSettings(settings.copy(dashboardMetrics = it))
+                        component.onUpdateSettings(settings.withDashboardLayout(editedType, layout.copy(metrics = it)))
                     },
                 )
             }
@@ -302,12 +380,12 @@ private fun DashboardSettingsView(component: SettingsComponent) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 MultiChoiceRow(
-                    selected = settings.dashboardGraphs,
-                    options = DEFAULT_DASHBOARD_GRAPHS,
+                    selected = layout.graphs,
+                    options = dashboardGraphOptions(editedType),
                     label = { it.label(strings) },
                     minimumSelectionText = strings.settings.keepOneDashboardOptionSelected,
                     onSelected = {
-                        component.onUpdateSettings(settings.copy(dashboardGraphs = it))
+                        component.onUpdateSettings(settings.withDashboardLayout(editedType, layout.copy(graphs = it)))
                     },
                 )
                 ChoiceRow(
@@ -380,6 +458,139 @@ private fun LanguageSettingsView(component: SettingsComponent) {
                     component.onUpdateSettings(settings.copy(language = it))
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun SourcesSettingsView(component: SettingsComponent) {
+    val state by component.state.collectAsStateWithLifecycle()
+    val settings = state.settings
+    val strings = LocalStrings.current
+    var editedType by rememberSaveable { mutableStateOf(state.selectedEquipmentType) }
+    val sources = settings.sensorSources(editedType)
+
+    SettingsPageScaffold(title = strings.settings.dataSources, component = component) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.devices.equipmentType) {
+                ChoiceRow(
+                    title = strings.settings.dataSourcesEquipmentType,
+                    selected = editedType,
+                    options = EquipmentType.entries.toList(),
+                    label = { equipmentTypeLabel(it, strings) },
+                    onSelected = { editedType = it },
+                )
+            }
+            Section(strings.settings.dataSources) {
+                SourcedMetric.entries.forEach { metric ->
+                    ChoiceRow(
+                        title = sourcedMetricLabel(metric, strings),
+                        selected = sources.of(metric),
+                        options = ValueSource.entries.toList(),
+                        label = { valueSourceLabel(it, strings) },
+                        onSelected = {
+                            component.onUpdateSettings(settings.withSensorSource(editedType, metric, it))
+                        },
+                    )
+                }
+                Text(
+                    strings.settings.dataSourcesHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun IndoorCyclingSettingsView(component: SettingsComponent) {
+    val state by component.state.collectAsStateWithLifecycle()
+    val settings = state.settings
+    val strings = LocalStrings.current
+    val presets = settings.targetPowerPresets
+    var newPresetText by rememberSaveable { mutableStateOf("") }
+    val newPreset = newPresetText.trim().toIntOrNull()
+    val canAdd = isNewTargetPowerPresetAllowed(newPreset, presets)
+
+    SettingsPageScaffold(title = strings.settings.indoorCycling, component = component) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.settings.targetPowerPresets) {
+                Text(
+                    strings.settings.targetPowerPresetsSubtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    presets.forEach { watts ->
+                        val removeLabel = strings.settings.targetPowerRemovePreset(watts)
+                        InputChip(
+                            selected = false,
+                            onClick = {
+                                component.onUpdateSettings(settings.copy(targetPowerPresets = presets - watts))
+                            },
+                            label = { Text("$watts W  ✕") },
+                            modifier = Modifier.semantics { contentDescription = removeLabel },
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    OutlinedTextField(
+                        value = newPresetText,
+                        onValueChange = { updated -> newPresetText = updated.filter(Char::isDigit).take(4) },
+                        label = { Text(strings.settings.targetPowerNewPreset) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedButton(
+                        enabled = canAdd,
+                        onClick = {
+                            val added = newPreset ?: return@OutlinedButton
+                            component.onUpdateSettings(
+                                settings.copy(targetPowerPresets = sanitizeTargetPowerPresets(presets + added)),
+                            )
+                            newPresetText = ""
+                        },
+                    ) {
+                        Text(strings.settings.targetPowerAddPreset)
+                    }
+                }
+                Text(
+                    strings.settings.targetPowerPresetLimits(
+                        TARGET_POWER_PRESET_RANGE.first,
+                        TARGET_POWER_PRESET_RANGE.last,
+                        MAX_TARGET_POWER_PRESETS,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                ActionRow(
+                    title = strings.settings.targetPowerRestoreDefaults,
+                    subtitle = strings.settings.targetPowerRestoreDefaultsSubtitle,
+                    actionLabel = strings.settings.targetPowerRestoreAction,
+                    enabled = presets != DEFAULT_TARGET_POWER_PRESETS,
+                    onClick = {
+                        component.onUpdateSettings(settings.copy(targetPowerPresets = DEFAULT_TARGET_POWER_PRESETS))
+                    },
+                )
+            }
+            Section(strings.settings.targetPowerStep) {
+                ChoiceRow(
+                    title = strings.settings.targetPowerStepSubtitle,
+                    selected = settings.targetPowerStepWatts,
+                    options = TARGET_POWER_STEP_OPTIONS,
+                    label = { "$it W" },
+                    onSelected = {
+                        component.onUpdateSettings(settings.copy(targetPowerStepWatts = it))
+                    },
+                )
+            }
         }
     }
 }
@@ -502,12 +713,6 @@ private fun ThirdPartySdkNotice(sdk: ThirdPartySdk) {
     }
 }
 
-private fun HeartRateSource.label(strings: de.ma.ftms.bridge.i18n.Strings): String =
-    when (this) {
-        HeartRateSource.GARMIN -> strings.settings.heartRateSourceGarmin
-        HeartRateSource.MACHINE -> strings.settings.heartRateSourceMachine
-    }
-
 private fun PowerSource.label(strings: de.ma.ftms.bridge.i18n.Strings): String =
     when (this) {
         PowerSource.FTMS_PREFERRED -> strings.settings.powerSourceFtmsPreferred
@@ -547,7 +752,7 @@ private fun NumericSettingsRow(
 }
 
 private fun Double.formatForSettings(): String =
-    if (this % 1.0 == 0.0) "%.0f".format(this) else toString()
+    if (this % 1.0 == 0.0) String.format(java.util.Locale.ROOT, "%.0f", this) else toString()
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -590,11 +795,12 @@ private fun <T> MultiChoiceRow(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> ChoiceRow(
+internal fun <T> ChoiceRow(
     title: String,
     selected: T,
     options: List<T>,
     label: (T) -> String,
+    enabled: Boolean = true,
     onSelected: (T) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -603,6 +809,7 @@ private fun <T> ChoiceRow(
             options.forEach { option ->
                 FilterChip(
                     selected = option == selected,
+                    enabled = enabled,
                     onClick = { onSelected(option) },
                     label = { Text(label(option)) },
                 )

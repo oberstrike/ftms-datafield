@@ -1,6 +1,8 @@
 package de.ma.ftms.bridge.ui
 
 import de.ma.ftms.bridge.i18n.Strings
+import de.ma.ftms.bridge.i18n.fmt
+import de.ma.ftms.bridge.i18n.formatNeutral
 import de.ma.ftms.bridge.runtime.DashboardChartTimespan
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
 import de.ma.ftms.core.SmoothedTreadmillSample
@@ -52,21 +54,21 @@ internal fun DashboardMetricKey.format(
     val raw = sample?.raw
     val missing = strings.common.missingValue
     return when (this) {
-        DashboardMetricKey.SPEED -> raw?.speedKmh?.let { "%.2f km/h".format(it) } ?: missing
+        DashboardMetricKey.SPEED -> raw?.speedKmh?.let { strings.fmt("%.2f km/h", it) } ?: missing
         DashboardMetricKey.PACE -> raw?.speedKmh?.let(::formatPace) ?: missing
         DashboardMetricKey.AVG_PACE -> sample?.distanceM
             ?.let { formatAveragePace(distanceM = it, durationMillis = activeDurationMillis) }
             ?: missing
-        DashboardMetricKey.INCLINE -> raw?.inclinePct?.let { "%.1f %%".format(it) } ?: missing
-        DashboardMetricKey.AVG_INCLINE -> averageInclinePct(samples)?.let { "%.1f %%".format(it) } ?: missing
-        DashboardMetricKey.DISTANCE -> sample?.distanceM?.let { "%.2f km".format(it / 1000.0) } ?: missing
-        DashboardMetricKey.ASCENT -> sample?.ascentM?.let { "%.1f m".format(it) } ?: missing
-        DashboardMetricKey.ASCENT_RATE -> sample?.ascentRateMetersPerMinute()?.let { "%.1f m/min".format(it) } ?: missing
+        DashboardMetricKey.INCLINE -> raw?.inclinePct?.let { strings.fmt("%.1f %%", it) } ?: missing
+        DashboardMetricKey.AVG_INCLINE -> averageInclinePct(samples)?.let { strings.fmt("%.1f %%", it) } ?: missing
+        DashboardMetricKey.DISTANCE -> sample?.distanceM?.let { strings.fmt("%.2f km", it / 1000.0) } ?: missing
+        DashboardMetricKey.ASCENT -> sample?.ascentM?.let { strings.fmt("%.1f m", it) } ?: missing
+        DashboardMetricKey.ASCENT_RATE -> sample?.ascentRateMetersPerMinute()?.let { strings.fmt("%.1f m/min", it) } ?: missing
         DashboardMetricKey.POWER -> raw?.powerW?.let { "$it W" } ?: missing
         DashboardMetricKey.HEART_RATE -> raw?.heartRateBpm?.let { "$it bpm" } ?: missing
-        DashboardMetricKey.CADENCE_STEP -> raw?.cadenceOrStepRate()?.let { "%.1f".format(it) } ?: missing
-        DashboardMetricKey.ELAPSED -> raw?.elapsedS?.let { "%02d:%02d".format(it / 60, it % 60) } ?: missing
-        DashboardMetricKey.RESISTANCE -> raw?.resistance?.let { "%.1f".format(it) } ?: missing
+        DashboardMetricKey.CADENCE_STEP -> raw?.cadenceOrStepRate()?.let { strings.fmt("%.1f", it) } ?: missing
+        DashboardMetricKey.ELAPSED -> raw?.elapsedS?.let { formatNeutral("%02d:%02d", it / 60, it % 60) } ?: missing
+        DashboardMetricKey.RESISTANCE -> raw?.resistance?.let { strings.fmt("%.1f", it) } ?: missing
         DashboardMetricKey.MACHINE -> raw?.kind?.let { machineLabel(it, strings) } ?: missing
     }
 }
@@ -125,7 +127,7 @@ private fun formatPace(speedKmh: Double): String {
     val secondsPerKm = 3600.0 / speedKmh
     val minutes = floor(secondsPerKm / 60.0).toInt()
     val seconds = (secondsPerKm - minutes * 60).toInt().coerceIn(0, 59)
-    return "%d:%02d min/km".format(minutes, seconds)
+    return formatNeutral("%d:%02d min/km", minutes, seconds)
 }
 
 internal fun formatAveragePace(distanceM: Double, durationMillis: Long): String? {
@@ -136,7 +138,7 @@ internal fun formatAveragePace(distanceM: Double, durationMillis: Long): String?
     val secondsPerKm = durationMillis.toDouble() / 1000.0 / (distanceM / 1000.0)
     val minutes = floor(secondsPerKm / 60.0).toInt()
     val seconds = (secondsPerKm - minutes * 60).toInt().coerceIn(0, 59)
-    return "%d:%02d min/km".format(minutes, seconds)
+    return formatNeutral("%d:%02d min/km", minutes, seconds)
 }
 
 internal fun averageInclinePct(samples: List<SmoothedTreadmillSample>): Double? {

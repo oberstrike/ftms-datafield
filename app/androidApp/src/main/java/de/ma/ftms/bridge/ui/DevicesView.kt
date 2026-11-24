@@ -1,5 +1,8 @@
 package de.ma.ftms.bridge.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,13 +17,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.ma.ftms.bridge.i18n.LocalStrings
 import de.ma.ftms.bridge.i18n.Strings
 import de.ma.ftms.bridge.navigation.DevicesComponent
 import de.ma.ftms.bridge.runtime.BridgeUiState
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.GarminConnectProblem
 
 @Composable
 fun DevicesView(component: DevicesComponent) {
@@ -58,6 +65,20 @@ private fun FtmsEquipmentSection(component: DevicesComponent, state: BridgeUiSta
                 Text(if (state.scanning) strings.common.stop else strings.devices.scan)
             }
         }
+
+        ChoiceRow(
+            title = strings.devices.equipmentType,
+            selected = state.selectedEquipmentType,
+            options = EquipmentType.entries.toList(),
+            label = { equipmentTypeLabel(it, strings) },
+            enabled = !state.running,
+            onSelected = component::onSelectEquipmentType,
+        )
+        Text(
+            if (state.running) strings.devices.equipmentTypeLockedWhileRunning else strings.devices.equipmentTypeSubtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         if (state.scanning) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -101,7 +122,10 @@ private fun GarminSection(component: DevicesComponent, state: BridgeUiState, str
             }
         }
 
-        if (state.garmins.isEmpty()) {
+        val garminConnectProblem = state.garminConnectProblem
+        if (garminConnectProblem != null) {
+            GarminConnectProblemHint(garminConnectProblem, strings)
+        } else if (state.garmins.isEmpty()) {
             Text(strings.devices.noGarminDeviceLoaded, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
@@ -132,3 +156,40 @@ private fun GarminSection(component: DevicesComponent, state: BridgeUiState, str
         }
     }
 }
+
+@Composable
+private fun GarminConnectProblemHint(problem: GarminConnectProblem, strings: Strings) {
+    val context = LocalContext.current
+    Text(garminConnectProblemText(problem, strings), color = MaterialTheme.colorScheme.error)
+
+    val storeAction = when (problem) {
+        GarminConnectProblem.NOT_INSTALLED -> strings.devices.installGarminConnect
+        GarminConnectProblem.UPGRADE_NEEDED -> strings.devices.updateGarminConnect
+        // The app is installed and current; the store cannot fix a service that does not answer.
+        GarminConnectProblem.SERVICE_ERROR -> null
+    }
+    if (storeAction != null) {
+        OutlinedButton(onClick = { openGarminConnectStorePage(context) }) {
+            Text(storeAction)
+        }
+    }
+}
+
+private fun openGarminConnectStorePage(context: Context) {
+    val storeApp = Intent(Intent.ACTION_VIEW, "market://details?id=$GARMIN_CONNECT_PACKAGE".toUri())
+    val storeWebsite = Intent(
+        Intent.ACTION_VIEW,
+        "https://play.google.com/store/apps/details?id=$GARMIN_CONNECT_PACKAGE".toUri(),
+    )
+    try {
+        context.startActivity(storeApp)
+    } catch (_: ActivityNotFoundException) {
+        // No store app on this phone: fall back to the browser, and give up quietly without one.
+        try {
+            context.startActivity(storeWebsite)
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
+}
+
+private const val GARMIN_CONNECT_PACKAGE = "com.garmin.android.apps.connectmobile"

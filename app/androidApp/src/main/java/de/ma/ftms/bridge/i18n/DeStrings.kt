@@ -1,6 +1,7 @@
 package de.ma.ftms.bridge.i18n
 
 object DeStrings : Strings {
+    override val locale: java.util.Locale = java.util.Locale.GERMAN
     override val common: CommonStrings = DeCommonStrings
     override val nav: NavigationStrings = DeNavigationStrings
     override val dashboard: DashboardStrings = DeDashboardStrings
@@ -31,6 +32,8 @@ private object DeCommonStrings : CommonStrings {
     override val treadmill = "Laufband"
     override val garmin = "Garmin"
     override val unknown = "Unbekannt"
+    override val sourceEquipment = "Gerät"
+    override val sourceWatch = "Uhr"
     override val machine = "Gerät"
     override val resistance = "Widerstand"
     override val speed = "Geschwindigkeit"
@@ -50,8 +53,8 @@ private object DeCommonStrings : CommonStrings {
     override val averageIncline = "Ø Steigung"
     override val averageResistance = "Ø Widerstand"
     override fun sendSummary(successCount: Int, failureCount: Int) = "$successCount ok / $failureCount fehlgeschlagen"
-    override fun minValue(value: Double) = "Min %.1f".format(value)
-    override fun maxValue(value: Double) = "Max %.1f".format(value)
+    override fun minValue(value: Double) = String.format(java.util.Locale.GERMAN, "Min %.1f", value)
+    override fun maxValue(value: Double) = String.format(java.util.Locale.GERMAN, "Max %.1f", value)
 }
 
 private object DeNavigationStrings : NavigationStrings {
@@ -69,8 +72,13 @@ private object DeDashboardStrings : DashboardStrings {
     override val bridgeIdle = "Bridge bereit"
     override val noFtmsEquipmentSelected = "Kein FTMS-Gerät ausgewählt"
     override val noGarminWatchSelected = "Keine Garmin-Uhr ausgewählt"
+    override val autoStartWaiting = "Auto-Start: wartet, bis das Gerät eingeschaltet ist"
+    override val autoStartReady = "Auto-Start: startet, sobald sich das Gerät bewegt"
+    override val autoStartHolding = "Auto-Start setzt wieder ein, sobald das Gerät steht"
     override val grantBluetoothPermissions = "Bluetooth-Berechtigungen erteilen"
     override val sectionStatus = "Status"
+    override val sectionSources = "Quellen"
+    override val sourcesHint = "Tippe auf einen Wert, um ihn für Anzeige, Verlauf und Uhr zu verwenden."
     override val sectionLiveMetrics = "Live-Werte"
     override val sectionLiveCharts = "Live-Diagramme"
     override val sectionLastSession = "Letzte Session"
@@ -82,6 +90,15 @@ private object DeDashboardStrings : DashboardStrings {
     override val bluetoothOff = "Bluetooth aus"
     override val ftmsConnected = "FTMS verbunden"
     override val ftmsDisconnected = "FTMS getrennt"
+    override val footPod = "Laufsensor"
+    override val footPodOff = "startet mit der Bridge"
+    override val footPodTreadmillOnly = "nur für Laufbänder"
+    override val footPodUnsupported = "vom Telefon nicht unterstützt"
+    override val footPodPermissionMissing = "Berechtigung fehlt"
+    override val footPodAdvertising = "wartet auf die Uhr"
+    override val footPodConnected = "mit der Uhr verbunden"
+    override val footPodFailed = "Start fehlgeschlagen"
+    override val footPodHint = "Eine Uhr nutzt das Telefon nicht gleichzeitig als Sensor und über Garmin Connect. Entweder reicht ein Relais auf einem Rechner den Sensor weiter (siehe README), oder an der Uhr ist die Telefonverbindung ausgeschaltet und das Datenfeld bekommt keine Werte."
     override val garminReady = "Garmin bereit"
     override val garminPending = "Garmin offen"
     override val send = "Senden"
@@ -91,9 +108,22 @@ private object DeDashboardStrings : DashboardStrings {
     override val startBlockSelectFtms = "FTMS-Gerät auswählen"
     override val startBlockSelectGarmin = "Garmin-Uhr auswählen"
     override val startBlockGarminApp = "Garmin-Geräte aktualisieren und eine Uhr mit installiertem Datenfeld auswählen"
-    override val machineBike = "Bike"
+    override val machineBike = "Indoor Cycling"
     override val machineTreadmill = "Laufband"
     override val machineCrossTrainer = "Crosstrainer"
+    override fun equipmentTypeMismatch(selected: String, received: String) =
+        "Das Gerät sendet Daten als $received, unter Geräte ist aber $selected gewählt."
+    override val targetPower = "Zielleistung"
+    override val targetPowerNotSet = "– W"
+    override val targetPowerDisconnected = "Verfügbar, sobald das Bike verbunden ist."
+    override val targetPowerUnsupported = "Dieses Gerät nimmt keine Zielleistung an."
+    override val targetPowerReady = "Keine Zielleistung gesetzt. Das Bike bleibt in seinem eigenen Modus."
+    override val targetPowerSending = "Wird an das Bike gesendet …"
+    override val targetPowerActive = "Vom Bike bestätigt."
+    override val targetPowerRejected = "Das Bike hat diese Zielleistung abgelehnt."
+    override val targetPowerFailed = "Das Bike hat nicht geantwortet. Bitte erneut versuchen."
+    override val targetPowerNoPresets = "Schnellwahlen unter Einstellungen > Indoor Cycling hinzufügen."
+    override fun targetPowerRange(minWatts: Int, maxWatts: Int) = "Das Bike nimmt $minWatts–$maxWatts W an."
     override fun chartSummary(title: String, latest: String, min: String, max: String, start: String, end: String): String =
         "$title-Diagramm. Aktuell $latest, Minimum $min, Maximum $max, von $start bis $end."
 }
@@ -119,6 +149,14 @@ private object DeDevicesStrings : DevicesStrings {
     override val garminSdkStatus = "SDK-Status"
     override val garminKnownDevices = "Bekannte Geräte"
     override val garminLastMessage = "Letzte Meldung"
+    override val garminConnectNotInstalled = "Garmin Connect ist nicht installiert. Die Bridge braucht es, um die Uhr zu erreichen."
+    override val garminConnectUpgradeNeeded = "Garmin Connect ist zu alt. Aktualisiere es, um die Bridge zu nutzen."
+    override val garminConnectServiceError = "Garmin Connect antwortet nicht. Öffne Garmin Connect und tippe dann auf Aktualisieren."
+    override val installGarminConnect = "Garmin Connect installieren"
+    override val equipmentType = "Gerätetyp"
+    override val equipmentTypeSubtitle = "Bestimmt, was Dashboard und Verlauf anzeigen."
+    override val equipmentTypeLockedWhileRunning = "Stoppe die Bridge, um den Gerätetyp zu ändern."
+    override val updateGarminConnect = "Garmin Connect aktualisieren"
 }
 
 private object DeHistoryStrings : HistoryStrings {
@@ -142,6 +180,8 @@ private object DeHistoryStrings : HistoryStrings {
     override val chartResistance = "Widerstand"
     override val viewMetrics = "Werte"
     override val viewCharts = "Diagramme"
+    override val filterAll = "Alle"
+    override val sourceComparison = "Gerät und Uhr"
     override fun savedSessions(count: Int) = "$count gespeichert"
 }
 
@@ -167,21 +207,37 @@ private object DeLogsStrings : LogsStrings {
 private object DeSettingsStrings : SettingsStrings {
     override val title = "Einstellungen"
     override val bridgeBehavior = "Bridge-Verhalten"
-    override val bridgeBehaviorSubtitle = "Verbindungsverhalten, Benachrichtigungs-Shortcut und Herzfrequenz-Quelle."
+    override val bridgeBehaviorSubtitle = "Verbindungsverhalten, automatischer Start und Benachrichtigungs-Shortcut."
     override val dashboard = "Dashboard"
     override val dashboardSubtitle = "Live-Werte, Diagramme und Diagramm-Zeitraum wählen."
     override val dashboardMetrics = "Dashboard-Werte"
     override val dashboardMetricsSubtitle = "Wähle die Live-Werte im Dashboard."
     override val dashboardGraphs = "Dashboard-Diagramme"
+    override val dashboardEquipmentType = "Layout für"
+    override val dataSources = "Datenquellen"
+    override val dataSourcesSubtitle = "Herzfrequenz, Leistung und Kadenz vom Gerät oder von der Uhr nehmen."
+    override val dataSourcesHint = "Die Uhr liefert ihre Herzfrequenz und die Werte der mit ihr gekoppelten Sensoren, etwa Brustgurt oder Leistungsmesser-Pedale. Die gewählte Quelle gilt für Anzeige, Verlauf und die an die Uhr gesendeten Werte. Liefert sie nichts, bleibt der Wert leer."
+    override val dataSourcesEquipmentType = "Quellen für"
+    override val indoorCycling = "Indoor Cycling"
+    override val indoorCyclingSubtitle = "Schnellwahlen und Schrittweite für die Zielleistung eines Indoor Bikes."
+    override val targetPowerPresets = "Schnellwahlen für die Zielleistung"
+    override val targetPowerPresetsSubtitle = "Erscheinen im Dashboard zur Auswahl mit einem Tipp. Tippe auf eine Schnellwahl, um sie zu entfernen."
+    override val targetPowerNewPreset = "Neue Schnellwahl (W)"
+    override val targetPowerAddPreset = "Hinzufügen"
+    override val targetPowerStep = "Schrittweite"
+    override val targetPowerStepSubtitle = "Um so viel ändern Plus und Minus im Dashboard die Zielleistung."
+    override val targetPowerRestoreDefaults = "Standard-Schnellwahlen"
+    override val targetPowerRestoreDefaultsSubtitle = "Ersetzt die Schnellwahlen durch 100, 150, 200 und 250 W."
+    override val targetPowerRestoreAction = "Wiederherstellen"
+    override fun targetPowerPresetLimits(minWatts: Int, maxWatts: Int, maxCount: Int) =
+        "$minWatts bis $maxWatts W, höchstens $maxCount Schnellwahlen."
+    override fun targetPowerRemovePreset(watts: Int) = "$watts W entfernen"
     override val dashboardGraphsSubtitle = "Wähle die Live-Diagramme im Dashboard."
     override val dashboardChartTimespan = "Diagramm-Zeitraum"
     override val chartTimespanFullSession = "Ganze Session"
     override val keepOneDashboardOptionSelected = "Mindestens eine Option muss ausgewählt bleiben."
     override val notificationShortcut = "Benachrichtigungs-Shortcut anzeigen"
     override val notificationShortcutSubtitle = "Fügt der laufenden Bridge-Benachrichtigung eine App-öffnen-Aktion hinzu."
-    override val heartRateSource = "Herzfrequenz-Quelle"
-    override val heartRateSourceGarmin = "Garmin-HF"
-    override val heartRateSourceMachine = "Geräte-HF"
     override val powerEstimate = "Leistungsschätzung"
     override val powerEstimateSubtitle = "Schätzt Laufbandleistung aus Körpergewicht, Geschwindigkeit, Steigung und Flachlauf-Kosten."
     override val powerSource = "Leistungsquelle"
@@ -193,6 +249,14 @@ private object DeSettingsStrings : SettingsStrings {
     override val powerInvalidSettings = "Gib ein positives Körpergewicht und positive Flachlauf-Kosten ein, um Leistung zu berechnen."
     override val autoReconnect = "Automatisch neu verbinden"
     override val autoReconnectSubtitle = "FTMS-Geräteverbindung nach Abbrüchen und Paket-Timeouts erneut versuchen."
+    override val autoStart = "Automatisch starten"
+    override val autoStartSubtitle = "Bridge starten, sobald sich das gewählte FTMS-Gerät bewegt, während diese App geöffnet ist. Die App bleibt bis dahin mit dem Gerät verbunden."
+    override val autoStop = "Automatisch stoppen"
+    override val autoStopSubtitle = "Laufband-Session beenden, sobald das Band 30 Sekunden stillsteht oder das Laufband 90 Sekunden nicht erreichbar ist. Die Session endet dann zu dem Zeitpunkt, an dem das Band stehen blieb. Solange die Uhr eine eigene Aktivität meldet, entscheidet stattdessen die Uhr. Sessions auf Indoor Bike oder Crosstrainer enden nicht von selbst."
+    override val followWatchTimer = "Aktivität der Uhr folgen"
+    override val followWatchTimerSubtitle = "Session starten, wenn die Aktivität an der Uhr startet, pausieren, wenn sie gestoppt wird, und beenden, wenn sie gespeichert oder verworfen wird. Braucht das aktuelle Datenfeld auf der Uhr und beim Start diese geöffnete App auf dem Telefon."
+    override val virtualFootPod = "Laufsensor für die Uhr"
+    override val virtualFootPodSubtitle = "Telefon als Bluetooth-Laufsensor sichtbar machen, solange die Bridge mit einem Laufband läuft. Eine damit gekoppelte Uhr übernimmt Tempo, Distanz und Schrittfrequenz vom Laufband. Zusammen mit dem Datenfeld geht das nur, wenn ein Relais auf einem Rechner den Sensor an die Uhr weiterreicht (siehe README); ohne Relais nur, solange an der Uhr die Telefonverbindung ausgeschaltet ist."
     override val timing = "Timing"
     override val timingSubtitle = "Paket-Timeout, Sendeintervall und Log-Aufbewahrung."
     override val packetTimeout = "Paket-Timeout"
