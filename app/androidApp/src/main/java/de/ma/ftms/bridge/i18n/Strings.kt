@@ -44,8 +44,10 @@ interface CommonStrings {
     val averagePower: String
     val heartRate: String
     val averageHeartRate: String
-    val cadenceStep: String
-    val averageCadenceStep: String
+    val cadence: String
+    val stepRate: String
+    val averageCadence: String
+    val averageStepRate: String
     val elapsed: String
     val pace: String
     val averagePace: String
@@ -54,8 +56,6 @@ interface CommonStrings {
     val averageIncline: String
     val averageResistance: String
     fun sendSummary(successCount: Int, failureCount: Int): String
-    fun minValue(value: Double): String
-    fun maxValue(value: Double): String
 }
 
 interface NavigationStrings {
@@ -81,12 +81,10 @@ interface DashboardStrings {
     val sectionSources: String
     val sourcesHint: String
     val sectionLiveMetrics: String
-    val sectionLiveCharts: String
     val sectionLastSession: String
     val noPreviousSession: String
     val viewMetrics: String
     val viewCharts: String
-    val noLiveGraphSamples: String
     val bluetoothReady: String
     val bluetoothOff: String
     val ftmsConnected: String
@@ -120,10 +118,23 @@ interface DashboardStrings {
     val targetPowerReady: String
     val targetPowerSending: String
     val targetPowerActive: String
+    val targetPowerReported: String
     val targetPowerRejected: String
     val targetPowerFailed: String
     val targetPowerNoPresets: String
     fun targetPowerRange(minWatts: Int, maxWatts: Int): String
+    val targetPowerCurrent: String
+    val targetPowerTarget: String
+    val targetPowerEnter: String
+    val targetPowerInputLabel: String
+    val targetPowerSet: String
+    val targetPowerClear: String
+    fun targetPowerInputRange(minWatts: Int, maxWatts: Int, stepWatts: Int): String
+    fun targetPowerDecrease(watts: Int): String
+    fun targetPowerIncrease(watts: Int): String
+    fun chartStats(average: String, max: String): String
+    val noDeliveredValues: String
+    val waitingForData: String
     fun chartSummary(title: String, latest: String, min: String, max: String, start: String, end: String): String
 }
 
@@ -175,7 +186,6 @@ interface HistoryStrings {
     val chartAscent: String
     val chartPower: String
     val chartHeartRate: String
-    val chartCadenceStep: String
     val chartResistance: String
     val viewMetrics: String
     val viewCharts: String
@@ -252,6 +262,8 @@ interface SettingsStrings {
     val autoStopSubtitle: String
     val followWatchTimer: String
     val followWatchTimerSubtitle: String
+    val waitForWatch: String
+    val waitForWatchSubtitle: String
     val virtualFootPod: String
     val virtualFootPodSubtitle: String
     val timing: String
@@ -293,6 +305,9 @@ interface NotificationStrings {
     val title: String
     val text: String
     val pausedText: String
+    val waitingTitle: String
+    val waitingText: String
+    val stopWaitingAction: String
     val openAppAction: String
     val pauseAction: String
     val resumeAction: String

@@ -48,13 +48,58 @@ class EquipmentTypeTest {
     }
 
     @Test
-    fun treadmillKeepsTheDashboardItAlwaysHad() {
+    fun treadmillDashboardHasEveryValueButTheResistance() {
+        val resistance = DashboardMetricKey.RESISTANCE
+
         assertEquals(
-            DashboardLayout(DEFAULT_DASHBOARD_METRICS, DEFAULT_DASHBOARD_GRAPHS),
+            DashboardLayout(DEFAULT_DASHBOARD_METRICS - resistance, DEFAULT_DASHBOARD_GRAPHS - resistance),
             defaultDashboardLayout(EquipmentType.TREADMILL),
         )
-        assertEquals(DashboardMetricKey.entries.toList(), dashboardMetricOptions(EquipmentType.TREADMILL))
-        assertEquals(DEFAULT_DASHBOARD_GRAPHS, dashboardGraphOptions(EquipmentType.TREADMILL))
+        assertEquals(DashboardMetricKey.entries - resistance, dashboardMetricOptions(EquipmentType.TREADMILL))
+        assertEquals(DEFAULT_DASHBOARD_GRAPHS - resistance, dashboardGraphOptions(EquipmentType.TREADMILL))
+    }
+
+    @Test
+    fun storedLayoutLosesWhatTheEquipmentTypeDoesNotHave() {
+        val stored = DashboardLayout(
+            metrics = listOf(DashboardMetricKey.SPEED, DashboardMetricKey.PACE, DashboardMetricKey.RESISTANCE),
+            graphs = listOf(DashboardMetricKey.INCLINE, DashboardMetricKey.POWER, DashboardMetricKey.RESISTANCE),
+        )
+
+        assertEquals(
+            DashboardLayout(
+                metrics = listOf(DashboardMetricKey.SPEED, DashboardMetricKey.PACE),
+                graphs = listOf(DashboardMetricKey.INCLINE, DashboardMetricKey.POWER),
+            ),
+            BridgeSettings().withDashboardLayout(EquipmentType.TREADMILL, stored).dashboardLayout(EquipmentType.TREADMILL),
+        )
+        assertEquals(
+            DashboardLayout(
+                metrics = listOf(DashboardMetricKey.SPEED, DashboardMetricKey.RESISTANCE),
+                graphs = listOf(DashboardMetricKey.POWER, DashboardMetricKey.RESISTANCE),
+            ),
+            BridgeSettings().withDashboardLayout(EquipmentType.INDOOR_BIKE, stored).dashboardLayout(EquipmentType.INDOOR_BIKE),
+        )
+    }
+
+    @Test
+    fun layoutLeftWithNothingFallsBackToTheDefault() {
+        val onlyRunningValues = DashboardLayout(
+            metrics = listOf(DashboardMetricKey.PACE),
+            graphs = listOf(DashboardMetricKey.AVG_PACE),
+        )
+
+        assertEquals(
+            defaultDashboardLayout(EquipmentType.INDOOR_BIKE),
+            onlyRunningValues.forType(EquipmentType.INDOOR_BIKE),
+        )
+    }
+
+    @Test
+    fun onlyTheTreadmillCountsSteps() {
+        assertTrue(EquipmentType.TREADMILL.cadenceIsStepRate)
+        assertTrue(!EquipmentType.INDOOR_BIKE.cadenceIsStepRate)
+        assertTrue(!EquipmentType.CROSS_TRAINER.cadenceIsStepRate)
     }
 
     @Test

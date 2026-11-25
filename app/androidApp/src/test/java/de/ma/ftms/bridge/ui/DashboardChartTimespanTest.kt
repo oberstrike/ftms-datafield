@@ -1,42 +1,38 @@
 package de.ma.ftms.bridge.ui
 
 import de.ma.ftms.bridge.runtime.DashboardChartTimespan
-import de.ma.ftms.core.DistanceSource
-import de.ma.ftms.core.FtmsSample
-import de.ma.ftms.core.SmoothedFtmsSample
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class DashboardChartTimespanTest {
     @Test
-    fun fullSessionKeepsAllSamples() {
-        val samples = listOf(sample(0L), sample(60_000L), sample(120_000L))
+    fun fullSessionKeepsAllPoints() {
+        val points = listOf(point(0.0), point(60.0), point(120.0))
 
-        assertEquals(samples, samples.filterForTimespan(DashboardChartTimespan.FULL_SESSION))
+        assertEquals(points, points.lastMillis(DashboardChartTimespan.FULL_SESSION.durationMillis))
     }
 
     @Test
-    fun timedWindowKeepsRecentSamplesRelativeToLatestTimestamp() {
-        val samples = listOf(sample(0L), sample(540_000L), sample(600_000L), sample(660_000L))
+    fun timedWindowKeepsThePointsBeforeTheLatest() {
+        val points = listOf(point(0.0), point(540.0), point(600.0), point(660.0))
 
         assertEquals(
-            listOf(sample(60_000L * 10), sample(60_000L * 11)),
-            samples.filterForTimespan(DashboardChartTimespan.MINUTES_1),
+            listOf(point(600.0), point(660.0)),
+            points.lastMillis(DashboardChartTimespan.MINUTES_1.durationMillis),
         )
     }
 
     @Test
-    fun missingTimestampFallsBackToAllSamples() {
-        val samples = listOf(sample(0L), sample(null), sample(120_000L))
+    fun aSessionShorterThanTheWindowIsKeptWhole() {
+        val points = listOf(point(0.0), point(30.0))
 
-        assertEquals(samples, samples.filterForTimespan(DashboardChartTimespan.MINUTES_1))
+        assertEquals(points, points.lastMillis(DashboardChartTimespan.MINUTES_1.durationMillis))
     }
 
-    private fun sample(timestampMillis: Long?): SmoothedFtmsSample =
-        SmoothedFtmsSample(
-            raw = FtmsSample(timestampMillis = timestampMillis, speedKmh = 6.0),
-            distanceM = timestampMillis?.toDouble() ?: 0.0,
-            ascentM = 0.0,
-            distanceSource = DistanceSource.SPEED_TIME,
-        )
+    @Test
+    fun noPointsStayNoPoints() {
+        assertEquals(emptyList(), emptyList<ChartPoint>().lastMillis(60_000L))
+    }
+
+    private fun point(seconds: Double) = ChartPoint(x = seconds, y = seconds / 10.0)
 }

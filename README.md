@@ -9,7 +9,7 @@ The project contains two parts:
 - an Android bridge app that connects to FTMS equipment, stores sessions locally, and forwards live samples to a Garmin watch through the Garmin Connect IQ companion channel
 - a Garmin Connect IQ data field source project that receives bridge samples and writes custom FIT developer fields
 
-The bridge reads the equipment and nothing else, with one exception: for the equipment type "Indoor cycling" it can set a target power through the FTMS Control Point `0x2AD9` when you ask for one. Treadmills and cross trainers are never written to, and no vendor control commands are sent.
+The bridge reads the equipment and nothing else, with one exception: for the equipment type "Indoor cycling" it can set a target power through the FTMS Control Point `0x2AD9` when you ask for one, and sets the last one again when a session starts. Treadmills and cross trainers are never written to, and no vendor control commands are sent.
 
 ## Download v1.0.0
 
@@ -53,7 +53,12 @@ The app stores sessions locally and shows history, charts, and diagnostic logs. 
 
 On the `Devices` tab you choose what the selected equipment is: `Treadmill`, `Indoor cycling` or `Cross trainer`. Equipment that names its type while advertising is preselected when you pick it; you can change the choice while the bridge is stopped.
 
+- During a session the dashboard opens on the charts, each with its latest value above it, followed by the live values, the `Sources` card and the status. Without a session it shows the status and the last session.
+- Start, pause and stop are in a bar fixed above the navigation, with the state of the bridge and the time of the running session. On the dashboard the bar is always there and names the equipment and the watch before the start, and whatever keeps the bridge from starting; on the other tabs it appears while a session runs.
 - The dashboard has its own set of live values and charts for each type. An indoor bike starts with power, cadence, speed, heart rate, distance and resistance, without pace, incline and ascent. `Settings > Dashboard` edits the set for each type.
+- Only what belongs to the type is offered and shown: no pace on a bike, no resistance on a treadmill, and the cadence is called `Step rate` (spm) on a treadmill and `Cadence` (rpm) otherwise.
+- During a session the dashboard leaves out what the equipment and the watch have not delivered so far: no tile, no chart and no row under `Sources` for a heart rate that nobody measures. It appears as soon as the first value arrives.
+- Each chart has a value axis on round numbers, the time since the start of the session below it, and the latest value above it, with average and maximum where they say something. Rest a finger on a chart to read the value at that time. The distance is a live value only: as a chart it would be a line that just rises.
 - Each session is stored with its type. The history shows the type, leaves out values that do not apply to it, and can be filtered by type once more than one type is stored. Sessions from before this version get their type from the data they contain.
 - The treadmill power estimate is applied to treadmills only.
 - If the equipment sends another type of data than the one selected, the dashboard says so.
@@ -62,9 +67,16 @@ On the `Devices` tab you choose what the selected equipment is: `Treadmill`, `In
 
 With the type `Indoor cycling`, the dashboard shows a `Target power` card while the bike is connected:
 
-- Tap a preset to set that target, or use plus and minus to move it in steps. Without a target, the first step starts from the power the bike currently measures.
+- The card stands directly below the power chart, whose latest value is the power the bike measures. Without a power chart the card shows the measured power itself, next to the target.
+- Tap the target to type it as a number. Only a value within the range the bike reports can be confirmed. The target is sent exact to the watt, also to a bike that reports steps of, say, 5 W: such a bike may hold 168 W all the same (a Wattbike Proton does). Only if the bike refuses a target between its steps does the app keep to those steps from then on.
+- The buttons move the target in two step sizes: 1 W (the bike's own step once it refused a target between its steps) and the step size from the settings. Where both are the same there is one pair of buttons. Without a target, the first step starts from the power the bike currently measures.
+- Tap a preset to set that target.
+- The power chart on the dashboard draws the target as a thin stepped line next to the measured power.
 - The card shows whether the bike confirmed or refused the target, and the range of targets the bike reports.
-- The target is set again after a reconnect within the session and is forgotten when the session stops. The app has no button to switch the target off; use the bike's own controls to leave its power mode.
+- When a paused session is resumed, the app sends its target again, so it holds after the break even if the bike let go of it in between.
+- A target set elsewhere is taken over, if the bike announces it (FTMS Fitness Machine Status, "Target Power Changed"): on the bike itself or by a watch that controls the bike. The card then says that the bike reported it, and the app sends nothing on its own, also not after a pause, until you set a target in the app again. Whoever sets the target is in charge; a watch that controls the bike overrides what other apps send. FTMS has no way to ask a bike for its current target, so a change made while the app is not connected goes unnoticed.
+- The app's target is set again after a reconnect within the session. A new session starts without a target: the app sends nothing until you set one, and shows a target as soon as the bike reports one. The target you last set in the app on this bike is filled in when you tap the target to type one.
+- To stop the app from setting a target, tap the target and choose `No target`. The app then sends nothing more; the bike keeps what it was last given, so use its own controls to leave its power mode.
 - `Settings > Indoor cycling` holds the presets (up to 8, from 10 to 2000 W; the defaults are 100, 150, 200 and 250 W) and the step size (5, 10 or 25 W).
 
 The bike must offer the FTMS Control Point with "Set Target Power". If it does not, the card says so.
@@ -75,10 +87,10 @@ The bike holds the target by its own measurement. If you show the power of pedal
 
 The watch sends its heart rate to the phone, and with it the power and cadence it has for the running activity. That includes sensors paired with the watch, such as a chest strap or power meter pedals. The app does not connect to these sensors itself.
 
-- The dashboard card `Sources` shows the value of the equipment and of the watch side by side for heart rate, power and cadence. Tap one to use it. The same choice is under `Settings > Data sources`, kept separately for each equipment type.
+- During a session the dashboard card `Sources` shows the value of the equipment and of the watch side by side for heart rate, power and cadence, as far as one of the two delivers it. Tap one to use it. The same choice is under `Settings > Data sources`, kept separately for each equipment type.
 - The default is heart rate from the watch, power and cadence from the equipment.
 - The chosen value is used for the display, the history and the values sent to the watch.
-- If the chosen source delivers nothing for 5 seconds, the value stays empty. The app does not switch to the other source by itself.
+- If the chosen source delivers nothing for 5 seconds, the value stays empty; the heart rate of the watch stays for 15 seconds, because it changes slowly and the watch's messages can take seconds to arrive. The app does not switch to the other source by itself.
 - Both values are stored with the session. For a session that contains both, the history shows the average of each, the difference, and a chart with both lines.
 - The treadmill power estimate counts as a value of the equipment.
 - The watch values are shown while the equipment sends data.
@@ -139,10 +151,20 @@ With `Settings > Bridge behavior > Follow the activity on the watch` (on by defa
 - Starting the activity on the watch starts the session. If the app is opened while the activity already records, the session starts within a few seconds.
 - Stopping the activity on the watch pauses the session, resuming it resumes the session. Auto pause on the watch does not pause the session.
 - Saving or discarding the activity ends the session.
-- The app has to be open on the phone when the activity starts, with treadmill and watch selected. The watch needs the data field from this version; an older data field does not report the activity.
+- The app has to be open on the phone when the activity starts, with treadmill and watch selected, unless it waits in the background (see below). The watch needs the data field from this version; an older data field does not report the activity.
 - Without a phone session the data field connects to the treadmill itself. When the session starts, it hands the connection over to the phone and shows `PWAIT` until the phone has data, which can take a few seconds.
 - `Start`, `Pause` and `Stop` in the app keep working. What you do there stays until the state of the activity on the watch changes again.
 - A session that already runs when the activity starts simply continues. For a session that covers exactly the activity, leave `Auto start` off and let the watch start it.
+
+#### Waiting in the background
+
+Android hands the watch's messages to the app only while the app is on screen or runs a foreground service. With `Settings > Bridge behavior > Wait for the watch in the background` (off by default) the app keeps such a service after you have opened it once, so the session starts with the activity without opening the app again.
+
+- While it waits, the notification `FTMS Bridge is waiting` is shown. `Stop waiting` there ends it until you open the app the next time.
+- The app does not search for or connect to the treadmill while it waits. It connects once the activity starts.
+- After a session the app waits again, for the next activity.
+- Waiting ends when the phone restarts or Android closes the app; open the app once to take it up again. Phones with strict battery management may close the app after some time unless you exempt it there.
+- It needs the Bluetooth permission and a selected treadmill and watch. Tested in the emulator with a simulated activity, not yet on a phone with a watch.
 
 ### Auto stop
 

@@ -1,6 +1,5 @@
 package de.ma.ftms.bridge.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,12 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -304,25 +301,35 @@ private fun HistoryDetail(
                 }
             }
         } else {
-            item { MetricChart(strings, strings.history.chartSpeed, "km/h", samples.points { speedKmh }) }
+            val whole = decimalChartFormat(strings, decimals = 0)
+            val tenths = decimalChartFormat(strings, decimals = 1)
+            item { MetricChart(strings, strings.history.chartSpeed, "km/h", samples.points { speedKmh }, tenths, showStats = true) }
             if (type.showsPace) {
-                item { MetricChart(strings, strings.common.pace, "min/km", samples.points { speedKmh?.takeIf { it > 0.0 }?.let { speed -> 60.0 / speed } }, reverseY = true) }
-                item { MetricChart(strings, strings.common.averagePace, "min/km", samples.averagePacePoints(), reverseY = true) }
+                item {
+                    MetricChart(
+                        strings = strings,
+                        title = strings.common.pace,
+                        unit = "min/km",
+                        points = samples.points { speedKmh?.takeIf { it > 0.0 }?.let { speed -> 60.0 / speed } },
+                        format = PACE_CHART_FORMAT,
+                        reverseY = true,
+                    )
+                }
+                item { MetricChart(strings, strings.common.averagePace, "min/km", samples.averagePacePoints(), PACE_CHART_FORMAT, reverseY = true) }
             }
-            item { MetricChart(strings, strings.common.distance, "m", samples.points(monotonic = true) { smoothedDistanceM }) }
             if (type.showsClimb) {
-                item { MetricChart(strings, strings.history.chartIncline, "%", samples.points { inclinePct }) }
-                item { MetricChart(strings, strings.common.averageIncline, "%", samples.averageInclinePoints()) }
-                item { MetricChart(strings, strings.history.chartAscent, "m", samples.points(monotonic = true) { ascentM }) }
+                item { MetricChart(strings, strings.history.chartIncline, "%", samples.points { inclinePct }, tenths, showStats = true) }
+                item { MetricChart(strings, strings.common.averageIncline, "%", samples.averageInclinePoints(), tenths) }
+                item { MetricChart(strings, strings.history.chartAscent, "m", samples.points(monotonic = true) { ascentM }, tenths) }
             }
             if (samples.any { it.powerW != null }) {
-                item { MetricChart(strings, strings.history.chartPower, "W", samples.points { powerW?.toDouble() }) }
+                item { MetricChart(strings, strings.history.chartPower, "W", samples.points { powerW?.toDouble() }, whole, showStats = true) }
             }
             if (samples.any { it.heartRateBpm != null }) {
-                item { MetricChart(strings, strings.history.chartHeartRate, "bpm", samples.points { heartRateBpm?.toDouble() }) }
+                item { MetricChart(strings, strings.history.chartHeartRate, "bpm", samples.points { heartRateBpm?.toDouble() }, whole, showStats = true) }
             }
             if (samples.any { it.cadenceRpm != null || it.stepRateSpm != null }) {
-                item { MetricChart(strings, strings.history.chartCadenceStep, "rpm/spm", samples.points { cadenceRpm ?: stepRateSpm }) }
+                item { MetricChart(strings, cadenceLabel(type, strings), cadenceUnit(type), samples.points { cadenceRpm ?: stepRateSpm }, whole, showStats = true) }
             }
             SourcedMetric.entries.forEach { metric ->
                 val equipmentPoints = samples.points { sourceValue(metric, equipment) }
@@ -331,16 +338,17 @@ private fun HistoryDetail(
                     item {
                         MetricChart(
                             strings = strings,
-                            title = "${sourcedMetricLabel(metric, strings)}: ${strings.history.sourceComparison}",
-                            unit = "",
+                            title = "${sourcedMetricLabel(metric, strings, type)}: ${strings.history.sourceComparison}",
+                            unit = sourcedMetricUnit(metric, type),
                             points = equipmentPoints,
+                            format = whole,
                             comparison = watchPoints,
                         )
                     }
                 }
             }
             if (samples.any { it.resistance != null }) {
-                item { MetricChart(strings, strings.history.chartResistance, "", samples.points { resistance }) }
+                item { MetricChart(strings, strings.history.chartResistance, "", samples.points { resistance }, tenths, showStats = true) }
             }
             item { Spacer(Modifier.height(8.dp)) }
         }
@@ -416,8 +424,8 @@ private fun HistoryModeSwitch(
 }
 
 /**
- * A line chart of [points]. With [comparison], the watch's values are drawn as a second line over
- * the equipment's and both get a legend.
+ * One value of a recorded session over time. With [comparison], the watch's values are drawn next
+ * to the equipment's and both are named in a legend.
  */
 @Composable
 private fun MetricChart(
@@ -425,110 +433,44 @@ private fun MetricChart(
     title: String,
     unit: String,
     points: List<ChartPoint>,
+    format: ChartValueFormat,
     reverseY: Boolean = false,
+    showStats: Boolean = false,
     comparison: List<ChartPoint> = emptyList(),
 ) {
-    Section(if (unit.isBlank()) title else "$title ($unit)") {
+    val equipmentLabel = strings.common.sourceEquipment
+    val watchLabel = strings.common.sourceWatch
+    val lines = remember(points, comparison, title, equipmentLabel, watchLabel) {
+        if (comparison.isEmpty()) {
+            listOf(ChartLine(title, points))
+        } else {
+            listOf(ChartLine(equipmentLabel, points), ChartLine(watchLabel, comparison, ChartLineRole.COMPARISON))
+        }
+    }
+    Section(title) {
         if (points.size < 2) {
             Text(strings.history.notEnoughSamples, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Section
         }
 
-        val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-        val allPoints = points + comparison
-        val min = allPoints.minOf { it.y }
-        val max = allPoints.maxOf { it.y }
-        val startSeconds = allPoints.minOf { it.x }
-        val endSeconds = allPoints.maxOf { it.x }
-        val lineColor = MaterialTheme.colorScheme.primary
-        val comparisonColor = MaterialTheme.colorScheme.tertiary
-        val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
-        if (comparison.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("● ${strings.common.sourceEquipment}", color = lineColor, style = MaterialTheme.typography.bodySmall)
-                Text("● ${strings.common.sourceWatch}", color = comparisonColor, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Text(strings.common.minValue(min), color = labelColor, style = MaterialTheme.typography.bodySmall)
-            Text(strings.common.maxValue(max), color = labelColor, style = MaterialTheme.typography.bodySmall)
-        }
-        SimpleLineChart(
-            series = listOfNotNull(
-                ChartSeries(points, lineColor),
-                comparison.takeIf { it.isNotEmpty() }?.let { ChartSeries(it, comparisonColor) },
-            ),
-            minX = startSeconds,
-            maxX = endSeconds,
-            minY = min,
-            maxY = max,
+        TimeSeriesChart(
+            title = title,
+            lines = lines,
+            unit = unit,
+            strings = strings,
+            format = format,
             reverseY = reverseY,
-            gridColor = gridColor,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
+            showStats = showStats,
         )
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Text(formatChartTime(startSeconds), color = labelColor, style = MaterialTheme.typography.bodySmall)
-            Text(formatChartTime(endSeconds), color = labelColor, style = MaterialTheme.typography.bodySmall)
-        }
     }
 }
 
-private class ChartSeries(val points: List<ChartPoint>, val color: Color)
-
-@Composable
-private fun SimpleLineChart(
-    series: List<ChartSeries>,
-    minX: Double,
-    maxX: Double,
-    minY: Double,
-    maxY: Double,
-    reverseY: Boolean,
-    gridColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier = modifier) {
-        val leftPadding = 6.dp.toPx()
-        val rightPadding = 6.dp.toPx()
-        val topPadding = 8.dp.toPx()
-        val bottomPadding = 8.dp.toPx()
-        val chartWidth = (size.width - leftPadding - rightPadding).coerceAtLeast(1f)
-        val chartHeight = (size.height - topPadding - bottomPadding).coerceAtLeast(1f)
-        val xRange = (maxX - minX).takeIf { it > 0.0 } ?: 1.0
-
-        repeat(4) { index ->
-            val y = topPadding + chartHeight * index / 3f
-            drawLine(
-                color = gridColor,
-                start = Offset(leftPadding, y),
-                end = Offset(leftPadding + chartWidth, y),
-                strokeWidth = 1.dp.toPx(),
-            )
-        }
-
-        series.forEach { line ->
-            var previous: Offset? = null
-            line.points.forEach { point ->
-                val x = leftPadding + (((point.x - minX) / xRange).toFloat() * chartWidth)
-                val y = topPadding + (chartYFraction(point.y, minY, maxY, reverseY) * chartHeight)
-                val current = Offset(x, y)
-                previous?.let {
-                    drawLine(
-                        color = line.color,
-                        start = it,
-                        end = current,
-                        strokeWidth = 2.5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                }
-                previous = current
-            }
-        }
+private fun sourcedMetricUnit(metric: SourcedMetric, type: EquipmentType): String =
+    when (metric) {
+        SourcedMetric.HEART_RATE -> "bpm"
+        SourcedMetric.POWER -> "W"
+        SourcedMetric.CADENCE -> cadenceUnit(type)
     }
-}
-
-private data class ChartPoint(val x: Double, val y: Double)
 
 private fun List<SessionSampleRecord>.points(
     monotonic: Boolean = false,
@@ -633,7 +575,7 @@ private fun historySummaryTiles(
                 averagePowerWatts(samples)?.let { strings.fmt("%.0f W", it) } ?: missing,
             ),
             HistoryMetricTile(
-                strings.common.averageCadenceStep,
+                averageCadenceLabel(type, strings),
                 averageCadenceOrStep(samples)?.let { strings.fmt("%.0f", it) } ?: missing,
             ),
             packets,
@@ -677,7 +619,7 @@ private fun historyMetricTiles(
     }
     averagePowerWatts(samples)?.let { metrics += HistoryMetricTile(strings.common.averagePower, strings.fmt("%.0f W", it)) }
     averageHeartRateBpm(samples)?.let { metrics += HistoryMetricTile(strings.common.averageHeartRate, strings.fmt("%.0f bpm", it)) }
-    averageCadenceOrStep(samples)?.let { metrics += HistoryMetricTile(strings.common.averageCadenceStep, strings.fmt("%.1f", it)) }
+    averageCadenceOrStep(samples)?.let { metrics += HistoryMetricTile(averageCadenceLabel(type, strings), strings.fmt("%.1f", it)) }
     averageResistance(samples)?.let { metrics += HistoryMetricTile(strings.common.averageResistance, strings.fmt("%.1f", it)) }
     return metrics
 }
@@ -726,12 +668,8 @@ private fun sourceComparisonTiles(
 ): List<HistoryMetricTile> =
     SourcedMetric.entries.flatMap { metric ->
         val comparison = compareSources(samples, metric) ?: return@flatMap emptyList()
-        val label = sourcedMetricLabel(metric, strings)
-        val unit = when (metric) {
-            SourcedMetric.HEART_RATE -> "bpm"
-            SourcedMetric.POWER -> "W"
-            SourcedMetric.CADENCE -> if (type.showsPace) "spm" else "rpm"
-        }
+        val label = sourcedMetricLabel(metric, strings, type)
+        val unit = sourcedMetricUnit(metric, type)
         listOf(
             HistoryMetricTile(
                 "$label · ${strings.common.sourceEquipment}",
@@ -814,6 +752,3 @@ private fun formatDuration(durationMillis: Long): String {
         formatNeutral("%02d:%02d", minutes, seconds)
     }
 }
-
-private fun formatChartTime(seconds: Double): String =
-    formatDuration((seconds * 1_000.0).toLong())

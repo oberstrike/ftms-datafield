@@ -20,6 +20,22 @@ class FtmsControlPointTest {
     }
 
     @Test
+    fun readsTheTargetPowerFromAMachineStatus() {
+        assertEquals(150, FtmsMachineStatus.targetPowerWatts(hex("08 96 00")))
+        assertEquals(300, FtmsMachineStatus.targetPowerWatts(hex("08 2C 01")))
+        assertEquals(-10, FtmsMachineStatus.targetPowerWatts(hex("08 F6 FF")))
+    }
+
+    @Test
+    fun otherMachineStatusesNameNoTargetPower() {
+        // Target resistance changed, stopped by the user, too short, empty.
+        assertNull(FtmsMachineStatus.targetPowerWatts(hex("07 32")))
+        assertNull(FtmsMachineStatus.targetPowerWatts(hex("02 01")))
+        assertNull(FtmsMachineStatus.targetPowerWatts(hex("08 96")))
+        assertNull(FtmsMachineStatus.targetPowerWatts(byteArrayOf()))
+    }
+
+    @Test
     fun readsAResponseIndication() {
         val accepted = FtmsControlPoint.parseResponse(hex("80 05 01"))
         assertEquals(FtmsControlResponse(requestOpCode = 0x05, resultCode = 0x01), accepted)

@@ -3,10 +3,16 @@ package de.ma.ftms.bridge
 import de.ma.ftms.bridge.runtime.DEFAULT_TARGET_POWER_PRESETS
 import de.ma.ftms.bridge.runtime.PowerControlState
 import de.ma.ftms.bridge.runtime.PowerControlStatus
+import de.ma.ftms.bridge.runtime.RememberedTargetPower
 import de.ma.ftms.bridge.runtime.TargetPowerController
+import de.ma.ftms.bridge.runtime.TargetPowerPoint
+import de.ma.ftms.bridge.runtime.appendTargetPowerPoint
 import de.ma.ftms.bridge.runtime.isNewTargetPowerPresetAllowed
+import de.ma.ftms.bridge.runtime.parseTargetPowerInput
 import de.ma.ftms.bridge.runtime.sanitizeTargetPowerPresets
 import de.ma.ftms.bridge.runtime.steppedTargetPower
+import de.ma.ftms.bridge.runtime.suggestedTargetPower
+import de.ma.ftms.bridge.runtime.targetPowerToRemember
 import de.ma.ftms.core.FtmsControlPoint
 import de.ma.ftms.core.FtmsControlResponse
 import de.ma.ftms.core.FtmsPowerRange
@@ -56,6 +62,56 @@ class TargetPowerControllerTest {
 
         assertEquals(PowerControlStatus.UNSUPPORTED, controller.state.status)
         assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun sendsTheTargetAgainOnRequest() {
+        connectedBike()
+        controller.requestTarget(150)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        assertEquals(2, sent.size)
+
+        assertTrue(controller.resendTarget())
+        assertContentEquals(FtmsControlPoint.setTargetPower(150), sent.last())
+        assertEquals(3, sent.size)
+        assertEquals(PowerControlStatus.SENDING, controller.state.status)
+
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        assertEquals(PowerControlStatus.ACTIVE, controller.state.status)
+        assertEquals(150, controller.state.targetWatts)
+    }
+
+    @Test
+    fun asksForControlAgainWhenTheBikeDroppedItBeforeTheTargetIsSentAgain() {
+        connectedBike()
+        controller.requestTarget(150)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+
+        controller.resendTarget()
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER, FtmsControlPoint.RESULT_CONTROL_NOT_PERMITTED)
+        assertContentEquals(FtmsControlPoint.requestControl(), sent.last())
+
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        assertContentEquals(FtmsControlPoint.setTargetPower(150), sent.last())
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        assertEquals(PowerControlStatus.ACTIVE, controller.state.status)
+    }
+
+    @Test
+    fun sendsNothingAgainWithoutATargetOrWithoutTheBike() {
+        assertTrue(!controller.resendTarget())
+
+        connectedBike()
+        assertTrue(!controller.resendTarget())
+        assertTrue(sent.isEmpty())
+
+        controller.requestTarget(150)
+        controller.onEquipmentDisconnected(keepTarget = true)
+        val before = sent.size
+        assertTrue(!controller.resendTarget())
+        assertEquals(before, sent.size)
     }
 
     @Test
@@ -112,7 +168,7 @@ class TargetPowerControllerTest {
     }
 
     @Test
-    fun snapsTheTargetToTheRangeOfTheEquipment() {
+    fun keepsTheTargetWithinTheRangeOfTheEquipmentButExactToTheWatt() {
         connectedBike()
         controller.onSupportedRange(FtmsPowerRange(minWatts = 50, maxWatts = 400, stepWatts = 5))
 
@@ -120,8 +176,45 @@ class TargetPowerControllerTest {
         assertEquals(400, controller.state.targetWatts)
         controller.requestTarget(7)
         assertEquals(50, controller.state.targetWatts)
-        controller.requestTarget(152)
-        assertEquals(150, controller.state.targetWatts)
+        // A bike that reports steps of 5 W may still take 168 W.
+        controller.requestTarget(168)
+        assertEquals(168, controller.state.targetWatts)
+        assertEquals(1, controller.state.stepWatts)
+    }
+
+    @Test
+    fun fallsBackToTheReportedStepsOnceTheEquipmentRefusesATargetBetweenThem() {
+        connectedBike()
+        controller.onSupportedRange(FtmsPowerRange(minWatts = 50, maxWatts = 400, stepWatts = 5))
+        controller.requestTarget(168)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        assertContentEquals(FtmsControlPoint.setTargetPower(168), sent.last())
+
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER, FtmsControlPoint.RESULT_INVALID_PARAMETER)
+        assertContentEquals(FtmsControlPoint.setTargetPower(170), sent.last())
+        assertEquals(5, controller.state.stepWatts)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        assertEquals(PowerControlStatus.ACTIVE, controller.state.status)
+        assertEquals(170, controller.state.targetWatts)
+
+        // From then on only the steps are sent.
+        controller.requestTarget(173)
+        assertEquals(175, controller.state.targetWatts)
+    }
+
+    @Test
+    fun aRefusedTargetOnAStepStaysRefused() {
+        connectedBike()
+        controller.onSupportedRange(FtmsPowerRange(minWatts = 50, maxWatts = 400, stepWatts = 5))
+        controller.requestTarget(170)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        val sentBefore = sent.size
+
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER, FtmsControlPoint.RESULT_INVALID_PARAMETER)
+
+        assertEquals(PowerControlStatus.REJECTED, controller.state.status)
+        assertEquals(1, controller.state.stepWatts)
+        assertEquals(sentBefore, sent.size)
     }
 
     @Test
@@ -304,6 +397,173 @@ class TargetPowerControllerTest {
         assertEquals(105, steppedTargetPower(currentTarget = null, measuredWatts = null, stepWatts = 5, direction = 1))
         assertEquals(110, steppedTargetPower(currentTarget = null, measuredWatts = 0, stepWatts = 10, direction = 1))
         assertEquals(0, steppedTargetPower(currentTarget = 5, measuredWatts = null, stepWatts = 10, direction = -1))
+    }
+
+    @Test
+    fun takesOverATargetSetOnTheBikeWithoutSendingIt() {
+        connectedBike()
+        controller.onTargetReportedByEquipment(180)
+
+        assertEquals(
+            PowerControlState(status = PowerControlStatus.ACTIVE, targetWatts = 180, targetIsReported = true),
+            controller.state,
+        )
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun neverSendsATargetThatSomethingElseSet() {
+        connectedBike()
+        controller.requestTarget(150)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        // A watch that controls the bike sets its own target.
+        controller.onTargetReportedByEquipment(165)
+        val sentBefore = sent.size
+
+        assertTrue(!controller.resendTarget())
+        controller.onEquipmentDisconnected(keepTarget = true)
+        connectedBike()
+
+        assertEquals(sentBefore, sent.size)
+        assertEquals(
+            PowerControlState(status = PowerControlStatus.ACTIVE, targetWatts = 165, targetIsReported = true),
+            controller.state,
+        )
+    }
+
+    @Test
+    fun settingATargetInTheAppTakesOverFromAReportedOne() {
+        connectedBike()
+        controller.onTargetReportedByEquipment(165)
+
+        controller.requestTarget(170)
+        assertContentEquals(FtmsControlPoint.requestControl(), sent.last())
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+
+        assertEquals(PowerControlState(status = PowerControlStatus.ACTIVE, targetWatts = 170), controller.state)
+        assertTrue(controller.resendTarget())
+    }
+
+    @Test
+    fun remembersOnlyATargetSetInTheApp() {
+        val before = RememberedTargetPower(equipmentAddress = "AA:BB", watts = 185)
+        val ownTarget = PowerControlState(status = PowerControlStatus.ACTIVE, targetWatts = 150)
+        val reported = ownTarget.copy(targetWatts = 165, targetIsReported = true)
+
+        assertEquals(RememberedTargetPower("AA:BB", 150), targetPowerToRemember(before, "AA:BB", ownTarget))
+        // What a watch or the bike set is not the app's own target.
+        assertEquals(before, targetPowerToRemember(before, "AA:BB", reported))
+        assertEquals(before, targetPowerToRemember(before, "AA:BB", PowerControlState(status = PowerControlStatus.READY)))
+        assertEquals(before, targetPowerToRemember(before, null, ownTarget))
+    }
+
+    @Test
+    fun targetChangedOnTheBikeReplacesTheOneFromTheApp() {
+        connectedBike()
+        controller.requestTarget(150)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        val sentBefore = sent.size
+
+        controller.onTargetReportedByEquipment(175)
+
+        assertEquals(175, controller.state.targetWatts)
+        assertEquals(PowerControlStatus.ACTIVE, controller.state.status)
+        assertEquals(sentBefore, sent.size)
+    }
+
+    @Test
+    fun echoOfAnOlderCommandDoesNotUndoANewerRequest() {
+        connectedBike()
+        controller.requestTarget(160)
+        answer(FtmsControlPoint.OP_REQUEST_CONTROL)
+        // 160 is on its way; the user already moved on.
+        controller.requestTarget(170)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        // 170 is on its way when the bike reports the 160 it was given before.
+        controller.onTargetReportedByEquipment(160)
+
+        assertEquals(170, controller.state.targetWatts)
+        answer(FtmsControlPoint.OP_SET_TARGET_POWER)
+        controller.onTargetReportedByEquipment(170)
+        assertEquals(PowerControlState(status = PowerControlStatus.ACTIVE, targetWatts = 170), controller.state)
+    }
+
+    @Test
+    fun reportedTargetIsIgnoredWithoutAConnectionOrAValue() {
+        controller.onTargetReportedByEquipment(180)
+        assertNull(controller.state.targetWatts)
+
+        connectedBike()
+        controller.onTargetReportedByEquipment(0)
+        assertNull(controller.state.targetWatts)
+    }
+
+    @Test
+    fun lastTargetIsOfferedOnlyOnTheSameBike() {
+        val remembered = RememberedTargetPower(equipmentAddress = "AA:BB", watts = 185)
+
+        assertEquals(185, suggestedTargetPower(remembered, "AA:BB"))
+        assertNull(suggestedTargetPower(remembered, "CC:DD"))
+        assertNull(suggestedTargetPower(remembered, null))
+        assertNull(suggestedTargetPower(null, "AA:BB"))
+    }
+
+    @Test
+    fun aNewConnectionSendsNothingByItself() {
+        connectedBike()
+
+        assertEquals(PowerControlState(status = PowerControlStatus.READY), controller.state)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun stepsOfOneWattStartAtTheMeasuredPower() {
+        assertEquals(124, steppedTargetPower(currentTarget = null, measuredWatts = 123, stepWatts = 1, direction = 1))
+        assertEquals(199, steppedTargetPower(currentTarget = 200, measuredWatts = 123, stepWatts = 1, direction = -1))
+    }
+
+    @Test
+    fun typedTargetCountsOnlyWithinWhatTheBikeAccepts() {
+        val range = FtmsPowerRange(minWatts = 25, maxWatts = 800, stepWatts = 5)
+
+        assertEquals(203, parseTargetPowerInput("203", range))
+        assertEquals(25, parseTargetPowerInput("25", range))
+        assertEquals(800, parseTargetPowerInput("800", range))
+        assertNull(parseTargetPowerInput("24", range))
+        assertNull(parseTargetPowerInput("801", range))
+        assertNull(parseTargetPowerInput("", range))
+        assertNull(parseTargetPowerInput("20 W", range))
+        assertNull(parseTargetPowerInput("99999999999", range))
+    }
+
+    @Test
+    fun traceNotesEveryChangeOfTheTargetOnce() {
+        var trace = emptyList<TargetPowerPoint>()
+        trace = appendTargetPowerPoint(trace, TargetPowerPoint(1_000L, 150))
+        trace = appendTargetPowerPoint(trace, TargetPowerPoint(2_000L, 150))
+        trace = appendTargetPowerPoint(trace, TargetPowerPoint(3_000L, 200))
+        trace = appendTargetPowerPoint(trace, TargetPowerPoint(4_000L, null))
+
+        assertEquals(
+            listOf(TargetPowerPoint(1_000L, 150), TargetPowerPoint(3_000L, 200), TargetPowerPoint(4_000L, null)),
+            trace,
+        )
+    }
+
+    @Test
+    fun traceWithoutATargetStaysEmptyWhenNoneIsSet() {
+        assertEquals(emptyList(), appendTargetPowerPoint(emptyList(), TargetPowerPoint(1_000L, null)))
+    }
+
+    @Test
+    fun traceKeepsOnlyTheNewestChanges() {
+        var trace = emptyList<TargetPowerPoint>()
+        (1..10).forEach { trace = appendTargetPowerPoint(trace, TargetPowerPoint(it * 1_000L, 100 + it), maxPoints = 3) }
+
+        assertEquals(listOf(108, 109, 110), trace.map { it.watts })
     }
 
     @Test

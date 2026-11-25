@@ -24,6 +24,7 @@ import de.ma.ftms.core.DistanceSource
 import de.ma.ftms.core.FitShowStatusParser
 import de.ma.ftms.core.FtmsControlPoint
 import de.ma.ftms.core.FtmsMachineKind
+import de.ma.ftms.core.FtmsMachineStatus
 import de.ma.ftms.core.FtmsParser
 import de.ma.ftms.core.FtmsPowerRange
 import de.ma.ftms.core.FtmsSample
@@ -50,7 +51,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 private const val GARMIN_HEART_RATE_DIAGNOSTIC_INTERVAL_MS = 10_000L
 
@@ -127,6 +130,12 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
     private var lastWaitMessageAtMillis = 0L
     private val autoStartPolicy = AutoStartPolicy()
     private val appVisible = MutableStateFlow(false)
+
+    /** Set once the user ended the waiting for the watch in its notification, until the app is opened again. */
+    private val watchWaitDismissed = MutableStateFlow(false)
+
+    /** True while [BridgeForegroundService] is in the foreground, for a session or for waiting. */
+    private var foregroundServiceActive = false
     private var presenceWatchFailed = false
     private var equipmentSeen: CompletableDeferred<Unit>? = null
 
@@ -139,7 +148,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
     private var standbyLastPacketAtMillis = 0L
     private val targetPower = TargetPowerController(
         sendCommand = ::sendTargetPowerCommand,
-        onStateChanged = { powerControl -> _state.update { it.copy(powerControl = powerControl) } },
+        onStateChanged = ::onPowerControlChanged,
     )
     private var sequence = 0
     private val stopCompletionCallbacks = mutableListOf<() -> Unit>()
@@ -163,10 +172,12 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         footPod = VirtualFootPod(applicationContext, this)
 
         val remembered = preferences?.loadSelection()
+        val lastOwnTargetPower = preferences?.loadTargetPower()
         val settings = preferences?.loadSettings() ?: BridgeSettings()
         logCapture?.updateMaxEntries(settings.maxLogEntries)
         _state.update {
             it.copy(
+                lastOwnTargetPower = lastOwnTargetPower,
                 selectedTreadmillAddress = remembered?.treadmillAddress,
                 selectedTreadmillName = remembered?.treadmillName,
                 selectedEquipmentType = remembered?.equipmentType ?: EquipmentType.TREADMILL,
@@ -193,6 +204,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         observeEquipmentType()
         observeFootPod()
         observeAutoStart()
+        observeWatchWait()
         log("Bridge runtime initialized")
     }
 
@@ -236,8 +248,14 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         garminClient?.retryInitializationIfFailed()
     }
 
-    /** Auto-start only watches for the equipment while the app is on screen. */
+    /**
+     * Auto-start only watches for the equipment while the app is on screen. Opening the app also
+     * takes up the waiting for the watch again after the user had ended it.
+     */
     fun onAppVisibilityChanged(visible: Boolean) {
+        if (visible) {
+            watchWaitDismissed.value = false
+        }
         appVisible.value = visible
     }
 
@@ -438,11 +456,16 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
             return
         }
 
+        // While the bridge waits for the watch the service is in the foreground already. It then
+        // only gets a new notification further down: a session that starts with the activity on
+        // the watch starts in the background, where Android refuses a new foreground start.
         val serviceStart = runCatching {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, BridgeForegroundService::class.java).setAction(BridgeForegroundService.ACTION_START),
-            )
+            if (!foregroundServiceActive) {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, BridgeForegroundService::class.java).setAction(BridgeForegroundService.ACTION_START),
+                )
+            }
         }
         if (serviceStart.isFailure) {
             // Without the foreground service Android would stop the bridge once the app is hidden.
@@ -494,6 +517,10 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 treadmillConnected = false,
                 latest = null,
                 liveDashboardSamples = emptyList(),
+                // A target set before the start, on a bike already connected, holds from the first second.
+                targetPowerTrace = listOfNotNull(
+                    it.powerControl.targetWatts?.let { watts -> TargetPowerPoint(runStartedAtMillis, watts) },
+                ),
                 lastSendStatus = "starting",
                 reconnectStatus = "connecting",
                 nextRetryDelayMs = 0,
@@ -504,6 +531,8 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 latestDiagnosticLogPath = diagnostics?.latestLogPath,
             )
         }
+        // A service that waited for the watch now shows the session.
+        refreshBridgeNotification()
         enqueueHistoryWrite {
             val session = runCatching {
                 sessionHistory?.createSession(
@@ -601,6 +630,10 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         sendControlMessage("ftms_resume")
         refreshBridgeNotification()
         log("Bridge resumed")
+        // Whatever the bike did with the target during the break, it holds again from here on.
+        if (targetPower.resendTarget()) {
+            diagnostics?.info(TAG_BLE, "target_power_resent watts=${_state.value.powerControl.targetWatts} reason=resume")
+        }
     }
 
     fun stopBridge(onStopped: (() -> Unit)? = null) {
@@ -674,6 +707,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 treadmillConnected = false,
                 latest = null,
                 liveDashboardSamples = emptyList(),
+                targetPowerTrace = emptyList(),
                 lastSendStatus = "stopped",
                 reconnectStatus = "idle",
                 nextRetryDelayMs = 0,
@@ -932,7 +966,9 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         when (watchTimerAction(followedWatchTimer, state, current.running, current.paused)) {
             WatchTimerAction.START -> {
                 val context = appContext
-                if (context == null || !isBridgeStartPossible(current)) {
+                // Bluetooth may have been switched since the app was last on screen.
+                refreshPermissionState()
+                if (context == null || !isBridgeStartPossible(_state.value)) {
                     // Not followed yet, so the watch's next report tries again.
                     BridgeLogger.debug(TAG_RUNTIME, "Watch activity is recording, but the bridge cannot start yet")
                     return
@@ -1057,6 +1093,25 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         targetPower.onEquipmentReady(controlPointAvailable = available)
     }
 
+    override fun onMachineStatus(bytes: ByteArray) {
+        val watts = FtmsMachineStatus.targetPowerWatts(bytes) ?: return
+        val before = _state.value.powerControl.targetWatts
+        targetPower.onTargetReportedByEquipment(watts)
+        if (_state.value.powerControl.targetWatts != before) {
+            diagnostics?.info(TAG_BLE, "target_power_reported watts=$watts previous=$before")
+            log("Target power $watts W, reported by the bike")
+        }
+    }
+
+    /** Forgets the target and the one offered for typing. The bike keeps what it was last given. */
+    fun clearTargetPower() {
+        preferences?.saveTargetPower(null)
+        _state.update { it.copy(lastOwnTargetPower = null) }
+        targetPower.clearTarget()
+        diagnostics?.info(TAG_BLE, "target_power_cleared")
+        log("Target power no longer set by the app")
+    }
+
     override fun onSupportedPowerRange(bytes: ByteArray) {
         val range = FtmsPowerRange.parse(bytes)
         diagnostics?.info(TAG_BLE, "supported_power_range range=$range")
@@ -1099,18 +1154,45 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
         log("Target power $target W")
     }
 
-    /** Moves the target power one configured step up ([direction] 1) or down (-1). */
-    fun stepTargetPower(direction: Int) {
+    /** Moves the target power by [deltaWatts], up or down by its sign. */
+    fun adjustTargetPower(deltaWatts: Int) {
+        if (deltaWatts == 0) {
+            return
+        }
+
         val current = _state.value
         setTargetPower(
             steppedTargetPower(
                 currentTarget = current.powerControl.targetWatts,
                 // The target is held by the equipment, so its own measurement is the starting point.
                 measuredWatts = current.latest?.raw?.let { it.equipment?.powerW ?: it.powerW },
-                stepWatts = current.settings.targetPowerStepWatts,
-                direction = direction,
+                stepWatts = abs(deltaWatts),
+                direction = deltaWatts.sign,
             ),
         )
+    }
+
+    /**
+     * Takes over what the controller reports, notes a changed target in the session's trace and
+     * remembers a target set in the app, to offer it when the next one is typed.
+     */
+    private fun onPowerControlChanged(powerControl: PowerControlState) {
+        val sessionRuns = activeSessionStartedAtMillis > 0
+        val address = _state.value.selectedTreadmillAddress
+        val remembered = _state.value.lastOwnTargetPower
+        val toRemember = targetPowerToRemember(remembered, address, powerControl)
+        if (toRemember != remembered) {
+            preferences?.saveTargetPower(toRemember)
+        }
+        _state.update { current ->
+            val trace = if (sessionRuns && powerControl.targetWatts != current.powerControl.targetWatts) {
+                val timestamp = activeSessionStartedAtMillis + activeDurationAt(System.currentTimeMillis())
+                appendTargetPowerPoint(current.targetPowerTrace, TargetPowerPoint(timestamp, powerControl.targetWatts))
+            } else {
+                current.targetPowerTrace
+            }
+            current.copy(powerControl = powerControl, targetPowerTrace = trace, lastOwnTargetPower = toRemember)
+        }
     }
 
     private fun sendTargetPowerCommand(bytes: ByteArray, sequence: Int): Boolean {
@@ -1668,8 +1750,74 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
 
     private fun stopBridgeForegroundServiceIfIdle() {
         val context = appContext ?: return
-        if (shouldStopBridgeForegroundService(_state.value.running, activeSessionStartedAtMillis)) {
+        if (isForegroundServiceNeeded()) {
+            // Possibly needed for something else than before: the session ended, the bridge waits.
+            refreshBridgeNotification()
+        } else {
             context.stopService(Intent(context, BridgeForegroundService::class.java))
+        }
+    }
+
+    /** True while the foreground service has a session to keep alive or waits for the watch. */
+    internal fun isForegroundServiceNeeded(): Boolean =
+        !shouldStopBridgeForegroundService(
+            running = _state.value.running,
+            activeSessionStartedAtMillis = activeSessionStartedAtMillis,
+            waiting = isWatchWaitWanted(_state.value, watchWaitDismissed.value),
+        )
+
+    /** True while no session runs and the bridge stays in the foreground service for the watch. */
+    internal fun isWaitingForWatch(): Boolean =
+        !_state.value.running && isWatchWaitWanted(_state.value, watchWaitDismissed.value)
+
+    /** Called by the foreground service once Android let it into the foreground. */
+    internal fun onForegroundServiceStarted() {
+        foregroundServiceActive = true
+    }
+
+    /** Called by the foreground service when it ends, for whatever reason. */
+    internal fun onForegroundServiceStopped() {
+        foregroundServiceActive = false
+    }
+
+    /** Ends the waiting for the watch until the app is opened again; the action of its notification. */
+    internal fun dismissWatchWait() {
+        log("Waiting for the watch ended")
+        watchWaitDismissed.value = true
+    }
+
+    /** Called by the foreground service when Android refused the foreground start for waiting. */
+    internal fun onWatchWaitUnavailable(reason: String) {
+        BridgeLogger.warn(TAG_RUNTIME, "Waiting for the watch is not possible: $reason")
+        // Not tried again until the app is opened, where the cause may have been removed.
+        watchWaitDismissed.value = true
+    }
+
+    /** Enters and leaves the foreground service for waiting as [isWatchWaitWanted] changes. */
+    private fun observeWatchWait() {
+        scope.launch {
+            combine(_state, watchWaitDismissed, appVisible) { state, dismissed, visible ->
+                isWatchWaitWanted(state, dismissed) to visible
+            }
+                .distinctUntilChanged()
+                .collect { (wanted, visible) -> updateWatchWait(wanted, visible) }
+        }
+    }
+
+    private fun updateWatchWait(wanted: Boolean, visible: Boolean) {
+        val context = appContext ?: return
+        when {
+            !wanted -> stopBridgeForegroundServiceIfIdle()
+            foregroundServiceActive -> refreshBridgeNotification()
+            // Android lets an app into the foreground service only while it is on screen.
+            visible -> runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, BridgeForegroundService::class.java).setAction(BridgeForegroundService.ACTION_WAIT),
+                )
+            }.onFailure { error ->
+                BridgeLogger.warn(TAG_RUNTIME, "Waiting for the watch could not start: ${error.message ?: error::class.simpleName}")
+            }
         }
     }
 
@@ -1688,6 +1836,7 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
                 treadmillConnected = false,
                 latest = null,
                 liveDashboardSamples = emptyList(),
+                targetPowerTrace = emptyList(),
                 lastSendStatus = if (it.lastSendStatus == "idle") it.lastSendStatus else "stopped",
                 reconnectStatus = "idle",
                 nextRetryDelayMs = 0,
@@ -1703,11 +1852,15 @@ object BridgeRuntime : TreadmillBleClient.Callbacks, GarminBridgeClient.Callback
 
     private fun refreshBridgeNotification() {
         val context = appContext ?: return
-        if (!_state.value.running) {
+        if (!foregroundServiceActive) {
             return
         }
 
-        context.startService(Intent(context, BridgeForegroundService::class.java).setAction(BridgeForegroundService.ACTION_REFRESH))
+        runCatching {
+            context.startService(Intent(context, BridgeForegroundService::class.java).setAction(BridgeForegroundService.ACTION_REFRESH))
+        }.onFailure { error ->
+            BridgeLogger.warn(TAG_RUNTIME, "Notification refresh failed: ${error.message ?: error::class.simpleName}")
+        }
     }
 
     private fun bufferSessionSample(sample: SmoothedTreadmillSample) {
@@ -1893,9 +2046,6 @@ internal fun isPacketWatchdogExpired(
 
     return nowMillis - silentSinceMillis > timeoutMillis
 }
-
-internal fun shouldStopBridgeForegroundService(running: Boolean, activeSessionStartedAtMillis: Long): Boolean =
-    !running && activeSessionStartedAtMillis <= 0
 
 internal fun FtmsSample.withResolvedPower(
     settings: BridgeSettings,

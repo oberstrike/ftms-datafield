@@ -44,7 +44,8 @@ interface DashboardComponent {
     fun onPauseBridge()
     fun onStopBridge()
     fun onSetTargetPower(watts: Int)
-    fun onStepTargetPower(direction: Int)
+    fun onAdjustTargetPower(deltaWatts: Int)
+    fun onClearTargetPower()
     fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource)
 }
 
@@ -132,7 +133,8 @@ private class DefaultDashboardComponent(
     override fun onPauseBridge() = BridgeRuntime.pauseBridge()
     override fun onStopBridge() = BridgeRuntime.stopBridge()
     override fun onSetTargetPower(watts: Int) = BridgeRuntime.setTargetPower(watts)
-    override fun onStepTargetPower(direction: Int) = BridgeRuntime.stepTargetPower(direction)
+    override fun onAdjustTargetPower(deltaWatts: Int) = BridgeRuntime.adjustTargetPower(deltaWatts)
+    override fun onClearTargetPower() = BridgeRuntime.clearTargetPower()
     override fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource) =
         BridgeRuntime.selectSensorSource(metric, source)
 }

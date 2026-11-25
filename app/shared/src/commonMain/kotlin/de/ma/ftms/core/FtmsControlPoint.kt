@@ -41,6 +41,27 @@ object FtmsControlPoint {
     }
 }
 
+/**
+ * Notifications of the FTMS Fitness Machine Status characteristic (0x2ADA), limited to the one that
+ * names a target power.
+ */
+object FtmsMachineStatus {
+    const val OP_TARGET_POWER_CHANGED = 0x08
+
+    /**
+     * The target power in watts if [bytes] report that it changed, null for every other status.
+     * Equipment sends this after a change on its own controls and after a command that set it.
+     */
+    fun targetPowerWatts(bytes: ByteArray): Int? {
+        if (bytes.size < 3 || (bytes[0].toInt() and 0xFF) != OP_TARGET_POWER_CHANGED) {
+            return null
+        }
+
+        // Signed 16 bits, low byte first.
+        return (bytes[1].toInt() and 0xFF) or (bytes[2].toInt() shl 8)
+    }
+}
+
 /** The equipment's answer to one control point command. */
 data class FtmsControlResponse(
     val requestOpCode: Int,

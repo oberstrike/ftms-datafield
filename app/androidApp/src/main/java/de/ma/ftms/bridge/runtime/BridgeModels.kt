@@ -35,6 +35,7 @@ internal val VENDOR_SERVICE_UUID: UUID = UUID.fromString("0000fff0-0000-1000-800
 internal val VENDOR_NOTIFY_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
 internal val FITNESS_MACHINE_CONTROL_POINT_UUID: UUID = UUID.fromString("00002ad9-0000-1000-8000-00805f9b34fb")
 internal val SUPPORTED_POWER_RANGE_UUID: UUID = UUID.fromString("00002ad8-0000-1000-8000-00805f9b34fb")
+internal val FITNESS_MACHINE_STATUS_UUID: UUID = UUID.fromString("00002ada-0000-1000-8000-00805f9b34fb")
 internal val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 data class TreadmillDeviceItem(
@@ -122,13 +123,16 @@ val DEFAULT_DASHBOARD_METRICS: List<DashboardMetricKey> = listOf(
     DashboardMetricKey.RESISTANCE,
 )
 
+/**
+ * The distance is not among the charts: its line only ever rises, at the slope of the speed, and
+ * says nothing the speed chart and the distance tile do not say better.
+ */
 val DEFAULT_DASHBOARD_GRAPHS: List<DashboardMetricKey> = listOf(
     DashboardMetricKey.SPEED,
     DashboardMetricKey.PACE,
     DashboardMetricKey.AVG_PACE,
     DashboardMetricKey.INCLINE,
     DashboardMetricKey.AVG_INCLINE,
-    DashboardMetricKey.DISTANCE,
     DashboardMetricKey.ASCENT,
     DashboardMetricKey.ASCENT_RATE,
     DashboardMetricKey.POWER,
@@ -157,6 +161,8 @@ data class BridgeSettings(
     val autoStop: Boolean = true,
     /** Start, pause and stop the session together with the activity on the watch. */
     val followWatchTimer: Boolean = true,
+    /** Keep waiting for the activity on the watch after the app has left the screen. */
+    val waitForWatch: Boolean = false,
     /** Offer the treadmill's speed and distance to the watch as a Bluetooth running sensor. */
     val virtualFootPod: Boolean = false,
     val packetTimeoutSeconds: Int = 15,
@@ -180,7 +186,7 @@ data class BridgeSettings(
     val targetPowerStepWatts: Int = DEFAULT_TARGET_POWER_STEP_WATTS,
 ) {
     fun dashboardLayout(type: EquipmentType): DashboardLayout =
-        dashboardLayouts[type] ?: defaultDashboardLayout(type)
+        dashboardLayouts[type]?.forType(type) ?: defaultDashboardLayout(type)
 
     fun withDashboardLayout(type: EquipmentType, layout: DashboardLayout): BridgeSettings =
         copy(dashboardLayouts = dashboardLayouts + (type to layout))
@@ -218,6 +224,10 @@ data class BridgeUiState(
     val autoStartStatus: AutoStartStatus = AutoStartStatus.OFF,
     val footPodStatus: FootPodStatus = FootPodStatus.OFF,
     val powerControl: PowerControlState = PowerControlState(),
+    /** The changes of the target power during the running session, oldest first. */
+    val targetPowerTrace: List<TargetPowerPoint> = emptyList(),
+    /** The target last set in the app, offered when one is typed on the same bike. Never sent by itself. */
+    val lastOwnTargetPower: RememberedTargetPower? = null,
     val latest: SmoothedTreadmillSample? = null,
     val liveDashboardSamples: List<SmoothedTreadmillSample> = emptyList(),
     val lastSendStatus: String = "idle",

@@ -6,6 +6,7 @@ import de.ma.ftms.bridge.runtime.PowerSource
 import de.ma.ftms.bridge.runtime.SensorSources
 import de.ma.ftms.bridge.runtime.SourcedMetric
 import de.ma.ftms.bridge.runtime.ValueSource
+import de.ma.ftms.bridge.runtime.WATCH_HEART_RATE_MAX_AGE_MS
 import de.ma.ftms.bridge.runtime.WATCH_READINGS_MAX_AGE_MS
 import de.ma.ftms.bridge.runtime.WatchReadings
 import de.ma.ftms.bridge.runtime.legacyHeartRateSource
@@ -93,10 +94,25 @@ class SensorSourceResolverTest {
         val justFresh = bike(SensorSources(), now = watch.timestampMillis + WATCH_READINGS_MAX_AGE_MS)
         assertEquals(141, justFresh.heartRateBpm)
 
-        val stale = bike(SensorSources(), now = watch.timestampMillis + WATCH_READINGS_MAX_AGE_MS + 1)
+        val stale = bike(SensorSources(), now = watch.timestampMillis + WATCH_HEART_RATE_MAX_AGE_MS + 1)
         assertNull(stale.heartRateBpm)
         assertNull(stale.watch)
         assertEquals(182, stale.powerW)
+    }
+
+    @Test
+    fun keepsTheHeartRateOfTheWatchLongerThanItsPowerAndCadence() {
+        val all = SensorSources(heartRate = ValueSource.WATCH, power = ValueSource.WATCH, cadence = ValueSource.WATCH)
+
+        val late = bike(all, now = watch.timestampMillis + WATCH_READINGS_MAX_AGE_MS + 1)
+        assertEquals(141, late.heartRateBpm)
+        // A power that old is no longer what the rider does.
+        assertNull(late.powerW)
+        assertNull(late.cadenceRpm)
+        assertEquals(SensorReadings(heartRateBpm = 141), late.watch)
+
+        val stillThere = bike(all, now = watch.timestampMillis + WATCH_HEART_RATE_MAX_AGE_MS)
+        assertEquals(141, stillThere.heartRateBpm)
     }
 
     @Test

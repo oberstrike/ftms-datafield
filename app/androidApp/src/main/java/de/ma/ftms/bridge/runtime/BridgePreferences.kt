@@ -34,6 +34,24 @@ internal class BridgePreferences(context: Context) {
         }
     }
 
+    fun loadTargetPower(): RememberedTargetPower? {
+        val address = preferences.getString(KEY_TARGET_POWER_ADDRESS, null) ?: return null
+        val watts = preferences.getInt(KEY_TARGET_POWER_WATTS, 0).takeIf { it > 0 } ?: return null
+        return RememberedTargetPower(address, watts)
+    }
+
+    fun saveTargetPower(target: RememberedTargetPower?) {
+        preferences.edit {
+            if (target == null) {
+                remove(KEY_TARGET_POWER_ADDRESS)
+                remove(KEY_TARGET_POWER_WATTS)
+            } else {
+                putString(KEY_TARGET_POWER_ADDRESS, target.equipmentAddress)
+                putInt(KEY_TARGET_POWER_WATTS, target.watts)
+            }
+        }
+    }
+
     fun clearSelection() {
         preferences.edit {
             remove(KEY_TREADMILL_ADDRESS)
@@ -53,6 +71,7 @@ internal class BridgePreferences(context: Context) {
             autoStart = preferences.getBoolean(KEY_SETTINGS_AUTO_START, BridgeSettings().autoStart),
             autoStop = preferences.getBoolean(KEY_SETTINGS_AUTO_STOP, BridgeSettings().autoStop),
             followWatchTimer = preferences.getBoolean(KEY_SETTINGS_FOLLOW_WATCH_TIMER, BridgeSettings().followWatchTimer),
+            waitForWatch = preferences.getBoolean(KEY_SETTINGS_WAIT_FOR_WATCH, BridgeSettings().waitForWatch),
             virtualFootPod = preferences.getBoolean(KEY_SETTINGS_VIRTUAL_FOOT_POD, BridgeSettings().virtualFootPod),
             packetTimeoutSeconds = preferences.getInt(
                 KEY_SETTINGS_PACKET_TIMEOUT_SECONDS,
@@ -121,6 +140,7 @@ internal class BridgePreferences(context: Context) {
             putBoolean(KEY_SETTINGS_AUTO_START, settings.autoStart)
             putBoolean(KEY_SETTINGS_AUTO_STOP, settings.autoStop)
             putBoolean(KEY_SETTINGS_FOLLOW_WATCH_TIMER, settings.followWatchTimer)
+            putBoolean(KEY_SETTINGS_WAIT_FOR_WATCH, settings.waitForWatch)
             putBoolean(KEY_SETTINGS_VIRTUAL_FOOT_POD, settings.virtualFootPod)
             putInt(KEY_SETTINGS_PACKET_TIMEOUT_SECONDS, settings.packetTimeoutSeconds)
             putLong(KEY_SETTINGS_SEND_INTERVAL_MS, settings.sendIntervalMillis)
@@ -186,10 +206,13 @@ internal class BridgePreferences(context: Context) {
         private const val KEY_TREADMILL_NAME = "selected_treadmill_name"
         private const val KEY_GARMIN_ID = "selected_garmin_id"
         private const val KEY_GARMIN_NAME = "selected_garmin_name"
+        private const val KEY_TARGET_POWER_ADDRESS = "target_power_last_address"
+        private const val KEY_TARGET_POWER_WATTS = "target_power_last_watts"
         private const val KEY_SETTINGS_AUTO_RECONNECT = "settings_auto_reconnect"
         private const val KEY_SETTINGS_AUTO_START = "settings_auto_start"
         private const val KEY_SETTINGS_AUTO_STOP = "settings_auto_stop"
         private const val KEY_SETTINGS_FOLLOW_WATCH_TIMER = "settings_follow_watch_timer"
+        private const val KEY_SETTINGS_WAIT_FOR_WATCH = "settings_wait_for_watch"
         private const val KEY_SETTINGS_VIRTUAL_FOOT_POD = "settings_virtual_foot_pod"
         private const val KEY_SETTINGS_PACKET_TIMEOUT_SECONDS = "settings_packet_timeout_seconds"
         private const val KEY_SETTINGS_SEND_INTERVAL_MS = "settings_send_interval_ms"

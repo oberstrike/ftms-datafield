@@ -5,10 +5,12 @@ import de.ma.ftms.bridge.i18n.fmt
 import de.ma.ftms.bridge.i18n.formatNeutral
 import de.ma.ftms.bridge.runtime.DashboardChartTimespan
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
+import de.ma.ftms.bridge.runtime.EquipmentType
+import de.ma.ftms.bridge.runtime.SourcedMetric
 import de.ma.ftms.core.SmoothedTreadmillSample
 import kotlin.math.floor
 
-internal fun DashboardMetricKey.label(strings: Strings): String =
+internal fun DashboardMetricKey.label(strings: Strings, type: EquipmentType): String =
     when (this) {
         DashboardMetricKey.SPEED -> strings.common.speed
         DashboardMetricKey.PACE -> strings.common.pace
@@ -20,13 +22,13 @@ internal fun DashboardMetricKey.label(strings: Strings): String =
         DashboardMetricKey.ASCENT_RATE -> strings.common.ascentRate
         DashboardMetricKey.POWER -> strings.common.power
         DashboardMetricKey.HEART_RATE -> strings.common.heartRate
-        DashboardMetricKey.CADENCE_STEP -> strings.common.cadenceStep
+        DashboardMetricKey.CADENCE_STEP -> cadenceLabel(type, strings)
         DashboardMetricKey.ELAPSED -> strings.common.elapsed
         DashboardMetricKey.RESISTANCE -> strings.common.resistance
         DashboardMetricKey.MACHINE -> strings.common.machine
     }
 
-internal fun DashboardMetricKey.unit(): String =
+internal fun DashboardMetricKey.unit(type: EquipmentType): String =
     when (this) {
         DashboardMetricKey.SPEED -> "km/h"
         DashboardMetricKey.PACE -> "min/km"
@@ -38,7 +40,7 @@ internal fun DashboardMetricKey.unit(): String =
         DashboardMetricKey.ASCENT_RATE -> "m/min"
         DashboardMetricKey.POWER -> "W"
         DashboardMetricKey.HEART_RATE -> "bpm"
-        DashboardMetricKey.CADENCE_STEP -> "rpm/spm"
+        DashboardMetricKey.CADENCE_STEP -> cadenceUnit(type)
         DashboardMetricKey.ELAPSED,
         DashboardMetricKey.RESISTANCE,
         DashboardMetricKey.MACHINE,
@@ -94,6 +96,75 @@ internal fun DashboardMetricKey.chartValue(sample: SmoothedTreadmillSample): Dou
     }
 }
 
+/**
+ * Whether [sample] holds this value. The dashboard leaves out what the equipment and the watch
+ * never delivered in the running session, instead of showing an empty tile or chart for it.
+ */
+internal fun DashboardMetricKey.isDeliveredBy(sample: SmoothedTreadmillSample): Boolean {
+    val raw = sample.raw
+    return when (this) {
+        DashboardMetricKey.SPEED,
+        DashboardMetricKey.PACE,
+        DashboardMetricKey.AVG_PACE,
+        -> raw.speedKmh != null
+        DashboardMetricKey.INCLINE,
+        DashboardMetricKey.AVG_INCLINE,
+        DashboardMetricKey.ASCENT,
+        -> raw.inclinePct != null
+        DashboardMetricKey.ASCENT_RATE -> raw.inclinePct != null && raw.speedKmh != null
+        // Counted by the app from what arrives, so there from the first sample.
+        DashboardMetricKey.DISTANCE,
+        DashboardMetricKey.MACHINE,
+        -> true
+        DashboardMetricKey.POWER -> raw.powerW != null
+        DashboardMetricKey.HEART_RATE -> raw.heartRateBpm != null
+        DashboardMetricKey.CADENCE_STEP -> raw.cadenceOrStepRate() != null
+        DashboardMetricKey.ELAPSED -> raw.elapsedS != null
+        DashboardMetricKey.RESISTANCE -> raw.resistance != null
+    }
+}
+
+/** The values that at least one of [samples] holds. */
+internal fun deliveredDashboardMetrics(samples: List<SmoothedTreadmillSample>): Set<DashboardMetricKey> =
+    DashboardMetricKey.entries.filterTo(mutableSetOf()) { key -> samples.any(key::isDeliveredBy) }
+
+/** The values with a source to choose that the equipment or the watch delivered in [samples]. */
+internal fun deliveredSourcedMetrics(samples: List<SmoothedTreadmillSample>): Set<SourcedMetric> =
+    SourcedMetric.entries.filterTo(mutableSetOf()) { metric ->
+        samples.any { sourceValue(metric, it.raw.equipment) != null || sourceValue(metric, it.raw.watch) != null }
+    }
+
+/** How the chart of this value writes its numbers. */
+internal fun DashboardMetricKey.chartFormat(strings: Strings): ChartValueFormat =
+    when (this) {
+        DashboardMetricKey.PACE,
+        DashboardMetricKey.AVG_PACE,
+        -> PACE_CHART_FORMAT
+        DashboardMetricKey.DISTANCE,
+        DashboardMetricKey.POWER,
+        DashboardMetricKey.HEART_RATE,
+        DashboardMetricKey.CADENCE_STEP,
+        -> decimalChartFormat(strings, decimals = 0)
+        else -> decimalChartFormat(strings, decimals = 1)
+    }
+
+/**
+ * Whether average and maximum over the chart say something: not for totals and running averages,
+ * and not for the pace, whose mean over time is not the average pace.
+ */
+internal fun DashboardMetricKey.chartShowsStats(): Boolean =
+    when (this) {
+        DashboardMetricKey.SPEED,
+        DashboardMetricKey.INCLINE,
+        DashboardMetricKey.ASCENT_RATE,
+        DashboardMetricKey.POWER,
+        DashboardMetricKey.HEART_RATE,
+        DashboardMetricKey.CADENCE_STEP,
+        DashboardMetricKey.RESISTANCE,
+        -> true
+        else -> false
+    }
+
 internal fun DashboardMetricKey.reverseChartYAxis(): Boolean =
     this == DashboardMetricKey.PACE || this == DashboardMetricKey.AVG_PACE
 
@@ -106,19 +177,6 @@ internal fun chartYFraction(value: Double, minY: Double, maxY: Double, reverseY:
 internal fun DashboardChartTimespan.label(strings: Strings): String =
     durationMillis?.let { strings.settings.chartTimespanMinutes((it / 60_000L).toInt()) }
         ?: strings.settings.chartTimespanFullSession
-
-internal fun List<SmoothedTreadmillSample>.filterForTimespan(timespan: DashboardChartTimespan): List<SmoothedTreadmillSample> {
-    val durationMillis = timespan.durationMillis ?: return this
-    if (any { it.raw.timestampMillis == null }) {
-        return this
-    }
-
-    val latestTimestamp = lastOrNull()?.raw?.timestampMillis ?: return this
-    val threshold = latestTimestamp - durationMillis
-    return filter { sample ->
-        sample.raw.timestampMillis?.let { it >= threshold } ?: true
-    }
-}
 
 private fun formatPace(speedKmh: Double): String {
     if (speedKmh <= 0.0) {

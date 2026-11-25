@@ -263,6 +263,16 @@ private fun BridgeSettingsView(component: SettingsComponent) {
                     component.onUpdateSettings(settings.copy(followWatchTimer = it))
                 },
             )
+            if (settings.followWatchTimer) {
+                SettingsToggleRow(
+                    title = strings.settings.waitForWatch,
+                    subtitle = strings.settings.waitForWatchSubtitle,
+                    checked = settings.waitForWatch,
+                    onCheckedChange = {
+                        component.onUpdateSettings(settings.copy(waitForWatch = it))
+                    },
+                )
+            }
             SettingsToggleRow(
                 title = strings.settings.virtualFootPod,
                 subtitle = strings.settings.virtualFootPodSubtitle,
@@ -366,7 +376,7 @@ private fun DashboardSettingsView(component: SettingsComponent) {
                 MultiChoiceRow(
                     selected = layout.metrics,
                     options = dashboardMetricOptions(editedType),
-                    label = { it.label(strings) },
+                    label = { it.label(strings, editedType) },
                     minimumSelectionText = strings.settings.keepOneDashboardOptionSelected,
                     onSelected = {
                         component.onUpdateSettings(settings.withDashboardLayout(editedType, layout.copy(metrics = it)))
@@ -382,7 +392,7 @@ private fun DashboardSettingsView(component: SettingsComponent) {
                 MultiChoiceRow(
                     selected = layout.graphs,
                     options = dashboardGraphOptions(editedType),
-                    label = { it.label(strings) },
+                    label = { it.label(strings, editedType) },
                     minimumSelectionText = strings.settings.keepOneDashboardOptionSelected,
                     onSelected = {
                         component.onUpdateSettings(settings.withDashboardLayout(editedType, layout.copy(graphs = it)))
@@ -484,7 +494,7 @@ private fun SourcesSettingsView(component: SettingsComponent) {
             Section(strings.settings.dataSources) {
                 SourcedMetric.entries.forEach { metric ->
                     ChoiceRow(
-                        title = sourcedMetricLabel(metric, strings),
+                        title = sourcedMetricLabel(metric, strings, editedType),
                         selected = sources.of(metric),
                         options = ValueSource.entries.toList(),
                         label = { valueSourceLabel(it, strings) },

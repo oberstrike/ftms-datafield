@@ -322,12 +322,23 @@ fun valueSourceLabel(source: ValueSource, strings: Strings): String =
         ValueSource.WATCH -> strings.common.sourceWatch
     }
 
-fun sourcedMetricLabel(metric: SourcedMetric, strings: Strings): String =
+fun sourcedMetricLabel(metric: SourcedMetric, strings: Strings, type: EquipmentType): String =
     when (metric) {
         SourcedMetric.HEART_RATE -> strings.common.heartRate
         SourcedMetric.POWER -> strings.common.power
-        SourcedMetric.CADENCE -> strings.common.cadenceStep
+        SourcedMetric.CADENCE -> cadenceLabel(type, strings)
     }
+
+/** What the cadence of [type] is called: a step rate while running, a cadence otherwise. */
+fun cadenceLabel(type: EquipmentType, strings: Strings): String =
+    if (type.cadenceIsStepRate) strings.common.stepRate else strings.common.cadence
+
+fun averageCadenceLabel(type: EquipmentType, strings: Strings): String =
+    if (type.cadenceIsStepRate) strings.common.averageStepRate else strings.common.averageCadence
+
+/** Steps per minute while running, revolutions per minute otherwise. */
+fun cadenceUnit(type: EquipmentType): String =
+    if (type.cadenceIsStepRate) "spm" else "rpm"
 
 /** What the running sensor for the watch is doing, for the status card. */
 internal fun footPodStatusLabel(state: BridgeUiState, strings: Strings): String =
@@ -350,7 +361,7 @@ internal fun formatSourceValue(metric: SourcedMetric, readings: SensorReadings?,
     when (metric) {
         SourcedMetric.HEART_RATE -> readings?.heartRateBpm?.let { "$it bpm" }
         SourcedMetric.POWER -> readings?.powerW?.let { "$it W" }
-        SourcedMetric.CADENCE -> readings?.cadenceRpm?.let { "${it.roundToInt()} ${if (type.showsPace) "spm" else "rpm"}" }
+        SourcedMetric.CADENCE -> readings?.cadenceRpm?.let { "${it.roundToInt()} ${cadenceUnit(type)}" }
     }
 
 fun equipmentTypeLabel(type: EquipmentType, strings: Strings): String =

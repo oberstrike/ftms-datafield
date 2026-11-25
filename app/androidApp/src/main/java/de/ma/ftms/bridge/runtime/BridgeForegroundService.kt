@@ -25,18 +25,29 @@ class BridgeForegroundService : Service() {
         ensureNotificationChannel()
     }
 
+    /** True once Android let this service into the foreground. */
+    private var inForeground = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        val action = intent?.action
+        when (action) {
             ACTION_STOP -> {
-                BridgeRuntime.stopBridge { stopSelf() }
+                if (BridgeRuntime.state.value.running) {
+                    // The runtime stops the service itself, unless it goes on waiting for the watch.
+                    BridgeRuntime.stopBridge()
+                } else {
+                    // Without a session the action belongs to the waiting notification.
+                    BridgeRuntime.dismissWatchWait()
+                    stopSelf()
+                }
                 return START_NOT_STICKY
             }
             ACTION_PAUSE -> BridgeRuntime.pauseBridge()
             ACTION_RESUME -> BridgeRuntime.resumeBridge()
         }
 
-        if (intent?.action != ACTION_START) {
-            if (BridgeRuntime.state.value.running) {
+        if (action != ACTION_START && action != ACTION_WAIT) {
+            if (inForeground && BridgeRuntime.isForegroundServiceNeeded()) {
                 getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, notification())
             } else {
                 // Nothing to keep alive: the process was restarted without a running bridge, or an
@@ -48,6 +59,7 @@ class BridgeForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        // A service started for the foreground has to enter it, even if it is no longer needed.
         val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         } else {
@@ -55,15 +67,34 @@ class BridgeForegroundService : Service() {
         }
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), foregroundType)
+            inForeground = true
+            BridgeRuntime.onForegroundServiceStarted()
         } catch (error: RuntimeException) {
             // Android refuses the foreground start when the Bluetooth permission was revoked or
             // the app is not allowed to start foreground services right now.
-            BridgeRuntime.onForegroundServiceUnavailable(error.message ?: error::class.simpleName.orEmpty())
+            val reason = error.message ?: error::class.simpleName.orEmpty()
+            if (action == ACTION_WAIT && !BridgeRuntime.state.value.running) {
+                BridgeRuntime.onWatchWaitUnavailable(reason)
+            } else {
+                BridgeRuntime.onForegroundServiceUnavailable(reason)
+            }
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!BridgeRuntime.isForegroundServiceNeeded()) {
+            // What it was started for ended in the meantime.
             stopSelf()
         }
         // The bridge state lives in this process only, so a restart by the system after the
-        // process was killed could not resume the session anyway.
+        // process was killed could not resume the session anyway. Waiting for the watch cannot
+        // be resumed either: Android refuses the foreground to a service it restarts itself.
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        inForeground = false
+        BridgeRuntime.onForegroundServiceStopped()
+        super.onDestroy()
     }
 
     private fun ensureNotificationChannel() {
@@ -108,11 +139,18 @@ class BridgeForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val paused = BridgeRuntime.state.value.paused
+        val waiting = BridgeRuntime.isWaitingForWatch()
 
         val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_bridge)
-            .setContentTitle(strings.title)
-            .setContentText(if (paused) strings.pausedText else strings.text)
+            .setContentTitle(if (waiting) strings.waitingTitle else strings.title)
+            .setContentText(
+                when {
+                    waiting -> strings.waitingText
+                    paused -> strings.pausedText
+                    else -> strings.text
+                },
+            )
             .setContentIntent(openAppIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -121,6 +159,12 @@ class BridgeForegroundService : Service() {
 
         if (BridgeRuntime.state.value.settings.showOpenAppNotificationAction) {
             builder.addAction(R.drawable.ic_stat_bridge, strings.openAppAction, openAppIntent)
+        }
+
+        if (waiting) {
+            return builder
+                .addAction(R.drawable.ic_stat_bridge, strings.stopWaitingAction, stopIntent)
+                .build()
         }
 
         builder.addAction(
@@ -138,6 +182,7 @@ class BridgeForegroundService : Service() {
 
     companion object {
         const val ACTION_START = "de.ma.ftms.bridge.START"
+        const val ACTION_WAIT = "de.ma.ftms.bridge.WAIT"
         const val ACTION_REFRESH = "de.ma.ftms.bridge.REFRESH"
         const val ACTION_PAUSE = "de.ma.ftms.bridge.PAUSE"
         const val ACTION_RESUME = "de.ma.ftms.bridge.RESUME"

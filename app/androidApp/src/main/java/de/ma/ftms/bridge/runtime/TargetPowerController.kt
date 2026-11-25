@@ -11,10 +11,71 @@ data class PowerControlState(
     val targetWatts: Int? = null,
     /** What the equipment says it accepts, if it says so. */
     val range: FtmsPowerRange? = null,
+    /**
+     * The target was set by something else, such as a watch or the bike's own controls, and the
+     * equipment reported it. The app shows such a target but never sends it: whoever set it is in
+     * charge, and sending it would work against them.
+     */
+    val targetIsReported: Boolean = false,
+    /**
+     * The smallest step in which the target can be set. 1 W, whatever step the equipment reports:
+     * a bike that reports steps of 5 W may still hold 168 W (a Wattbike Proton does). The reported
+     * step applies only once the equipment refused a target between its steps.
+     */
+    val stepWatts: Int = 1,
 ) {
     val canSetTarget: Boolean
         get() = status != PowerControlStatus.DISCONNECTED && status != PowerControlStatus.UNSUPPORTED
+
+    /** The target closest to [watts] that can be sent: within the range, and on a step if those apply. */
+    fun acceptedTarget(watts: Int): Int {
+        val accepted = range ?: FALLBACK_POWER_RANGE
+        return if (stepWatts > 1) accepted.nearest(watts) else watts.coerceIn(accepted.minWatts, accepted.maxWatts)
+    }
 }
+
+/**
+ * One change of the target power during a session.
+ *
+ * @param timestampMillis on the session's own clock, which stands still during a pause, like the
+ * timestamps of the session's samples.
+ * @param watts the target from then on, or null if it was unset.
+ */
+data class TargetPowerPoint(val timestampMillis: Long, val watts: Int?)
+
+/** The last target power set in the app and the equipment it was set on, kept beyond the session. */
+data class RememberedTargetPower(val equipmentAddress: String, val watts: Int)
+
+/**
+ * What to remember once the controller is in [control]: a target the user set in the app on
+ * [equipmentAddress]. A target that something else set, and no target, leave [remembered] as it is.
+ */
+internal fun targetPowerToRemember(
+    remembered: RememberedTargetPower?,
+    equipmentAddress: String?,
+    control: PowerControlState,
+): RememberedTargetPower? {
+    val watts = control.targetWatts
+    return when {
+        watts == null || equipmentAddress == null || control.targetIsReported -> remembered
+        else -> RememberedTargetPower(equipmentAddress, watts)
+    }
+}
+
+/** The target to offer when one is typed on [equipmentAddress]: the last one set in the app on that bike. */
+internal fun suggestedTargetPower(remembered: RememberedTargetPower?, equipmentAddress: String?): Int? =
+    remembered?.takeIf { it.equipmentAddress == equipmentAddress }?.watts
+
+/** [trace] with [point] added if it changes the target, limited to the newest [maxPoints]. */
+internal fun appendTargetPowerPoint(
+    trace: List<TargetPowerPoint>,
+    point: TargetPowerPoint,
+    maxPoints: Int = MAX_TARGET_POWER_TRACE_POINTS,
+): List<TargetPowerPoint> =
+    if (trace.lastOrNull()?.watts == point.watts) trace else (trace + point).takeLast(maxPoints)
+
+/** Far more changes than a session has; keeps the state small if something sets targets in a loop. */
+internal const val MAX_TARGET_POWER_TRACE_POINTS = 1_000
 
 enum class PowerControlStatus {
     /** No connection to the equipment, or it is still being set up. */
@@ -72,11 +133,13 @@ internal class TargetPowerController(
         controlGranted = false
         inFlight = null
         if (!controlPointAvailable) {
-            update(state.copy(status = PowerControlStatus.UNSUPPORTED, targetWatts = null, range = null))
+            update(PowerControlState(status = PowerControlStatus.UNSUPPORTED))
             return
         }
 
-        update(state.copy(status = PowerControlStatus.READY))
+        // A reported target is shown as it was until the equipment says otherwise.
+        val status = if (state.targetIsReported) PowerControlStatus.ACTIVE else PowerControlStatus.READY
+        update(state.copy(status = status))
         controlRetried = false
         sendNext()
     }
@@ -93,18 +156,19 @@ internal class TargetPowerController(
             PowerControlState(
                 status = PowerControlStatus.DISCONNECTED,
                 targetWatts = state.targetWatts.takeIf { keepTarget },
+                targetIsReported = state.targetIsReported && keepTarget,
             ),
         )
     }
 
-    /** Forgets the target, e.g. when the session ends. Nothing is sent to the equipment. */
+    /** Forgets the target. Nothing is sent to the equipment, which keeps what it was last given. */
     fun clearTarget() {
         if (state.targetWatts == null) {
             return
         }
 
         val idleStatus = if (state.canSetTarget) PowerControlStatus.READY else state.status
-        update(state.copy(status = idleStatus, targetWatts = null))
+        update(state.copy(status = idleStatus, targetWatts = null, targetIsReported = false))
     }
 
     /** The user asks for [watts]; it is snapped to what the equipment accepts. */
@@ -113,10 +177,41 @@ internal class TargetPowerController(
             return
         }
 
-        val target = (state.range ?: FALLBACK_POWER_RANGE).nearest(watts)
+        val target = state.acceptedTarget(watts)
         controlRetried = false
-        update(state.copy(targetWatts = target))
+        update(state.copy(targetWatts = target, targetIsReported = false))
         sendNext()
+    }
+
+    /**
+     * Sends the current target once more. A bike may let go of its target on its own, for example
+     * when the rider stops for a break, without saying so; after the break the app's target is to
+     * hold again. Returns whether there was a target of the app's own to send.
+     */
+    fun resendTarget(): Boolean {
+        if (state.targetWatts == null || state.targetIsReported || !state.canSetTarget) {
+            return false
+        }
+
+        controlRetried = false
+        sendNext()
+        return true
+    }
+
+    /**
+     * The equipment reports that its target is now [watts], for example after a change on its own
+     * controls or from a watch that controls it. It is taken over as the target without sending
+     * anything, now or later, until the user sets a target in the app again.
+     *
+     * Ignored while a command is on its way: equipment also reports the targets it was just sent,
+     * and such an echo of an older command must not undo a newer request.
+     */
+    fun onTargetReportedByEquipment(watts: Int) {
+        if (!state.canSetTarget || inFlight != null || watts <= 0 || watts == state.targetWatts) {
+            return
+        }
+
+        update(state.copy(status = PowerControlStatus.ACTIVE, targetWatts = watts, targetIsReported = true))
     }
 
     fun onResponse(response: FtmsControlResponse) {
@@ -165,15 +260,29 @@ internal class TargetPowerController(
                 controlGranted = false
                 sendNext()
             }
+            refusedBetweenSteps(sentWatts, response) -> {
+                // This equipment means the steps it reports: from now on only those are sent.
+                val range = state.range ?: FALLBACK_POWER_RANGE
+                update(state.copy(targetWatts = range.nearest(sentWatts), stepWatts = range.stepWatts))
+                sendNext()
+            }
             response.resultCode == FtmsControlPoint.RESULT_NOT_SUPPORTED ->
-                update(state.copy(status = PowerControlStatus.UNSUPPORTED, targetWatts = null))
+                update(state.copy(status = PowerControlStatus.UNSUPPORTED, targetWatts = null, targetIsReported = false))
             else -> update(state.copy(status = PowerControlStatus.REJECTED))
         }
     }
 
+    /** Whether [response] refuses [sentWatts] and the target lies between the steps the equipment reports. */
+    private fun refusedBetweenSteps(sentWatts: Int, response: FtmsControlResponse): Boolean {
+        val refused = response.resultCode == FtmsControlPoint.RESULT_INVALID_PARAMETER ||
+            response.resultCode == FtmsControlPoint.RESULT_FAILED
+        val range = state.range ?: return false
+        return refused && state.stepWatts <= 1 && range.nearest(sentWatts) != sentWatts
+    }
+
     private fun sendNext() {
         val target = state.targetWatts
-        if (target == null || inFlight != null || !state.canSetTarget) {
+        if (target == null || state.targetIsReported || inFlight != null || !state.canSetTarget) {
             return
         }
 
@@ -238,6 +347,10 @@ internal fun steppedTargetPower(currentTarget: Int?, measuredWatts: Int?, stepWa
         ?: INITIAL_TARGET_POWER_WATTS
     return (base + direction * step).coerceAtLeast(0)
 }
+
+/** The target power typed as [text], or null unless it is a number within [range]. */
+internal fun parseTargetPowerInput(text: String, range: FtmsPowerRange): Int? =
+    text.toIntOrNull()?.takeIf { it in range.minWatts..range.maxWatts }
 
 /** Whether [watts] can be added to [presets]: valid, not yet there, and room left. */
 fun isNewTargetPowerPresetAllowed(watts: Int?, presets: List<Int>): Boolean =

@@ -13,11 +13,17 @@ enum class EquipmentType(
     val showsPace: Boolean,
     /** Incline and ascent only exist where the equipment can tilt. */
     val showsClimb: Boolean,
+    /** A resistance level only exists where the user works against a brake. */
+    val showsResistance: Boolean,
 ) {
-    TREADMILL(FtmsMachineKind.TREADMILL, showsPace = true, showsClimb = true),
-    INDOOR_BIKE(FtmsMachineKind.INDOOR_BIKE, showsPace = false, showsClimb = false),
-    CROSS_TRAINER(FtmsMachineKind.CROSS_TRAINER, showsPace = false, showsClimb = true),
+    TREADMILL(FtmsMachineKind.TREADMILL, showsPace = true, showsClimb = true, showsResistance = false),
+    INDOOR_BIKE(FtmsMachineKind.INDOOR_BIKE, showsPace = false, showsClimb = false, showsResistance = true),
+    CROSS_TRAINER(FtmsMachineKind.CROSS_TRAINER, showsPace = false, showsClimb = true, showsResistance = true),
     ;
+
+    /** While running, the cadence is the step rate (steps per minute); otherwise revolutions. */
+    val cadenceIsStepRate: Boolean
+        get() = showsPace
 
     companion object {
         /** Type for a stored or received machine kind; unknown kinds count as a treadmill. */
@@ -33,12 +39,21 @@ enum class EquipmentType(
 data class DashboardLayout(
     val metrics: List<DashboardMetricKey>,
     val graphs: List<DashboardMetricKey>,
-)
+) {
+    /**
+     * This layout without what [type] does not have, such as a pace on a bike. A stored layout can
+     * hold such values from an earlier version. A list that would end up empty is the default.
+     */
+    fun forType(type: EquipmentType): DashboardLayout {
+        val default = defaultDashboardLayout(type)
+        return DashboardLayout(
+            metrics = metrics.filter { it.appliesTo(type) }.ifEmpty { default.metrics },
+            graphs = graphs.filter { it in dashboardGraphOptions(type) }.ifEmpty { default.graphs },
+        )
+    }
+}
 
-/**
- * Metrics offered for [type], in the order the dashboard shows them. The treadmill keeps the
- * order it always had.
- */
+/** Metrics offered for [type], in the order the dashboard shows them. */
 fun dashboardMetricOptions(type: EquipmentType): List<DashboardMetricKey> {
     val applicable = DashboardMetricKey.entries.filter { it.appliesTo(type) }
     return if (type == EquipmentType.INDOOR_BIKE) (INDOOR_BIKE_METRICS + applicable).distinct() else applicable
@@ -54,7 +69,10 @@ fun dashboardGraphOptions(type: EquipmentType): List<DashboardMetricKey> =
 
 fun defaultDashboardLayout(type: EquipmentType): DashboardLayout =
     when (type) {
-        EquipmentType.TREADMILL -> DashboardLayout(DEFAULT_DASHBOARD_METRICS, DEFAULT_DASHBOARD_GRAPHS)
+        EquipmentType.TREADMILL -> DashboardLayout(
+            metrics = DEFAULT_DASHBOARD_METRICS.filter { it.appliesTo(EquipmentType.TREADMILL) },
+            graphs = dashboardGraphOptions(EquipmentType.TREADMILL),
+        )
         EquipmentType.INDOOR_BIKE -> DashboardLayout(INDOOR_BIKE_METRICS, INDOOR_BIKE_GRAPHS)
         EquipmentType.CROSS_TRAINER -> DashboardLayout(
             metrics = dashboardMetricOptions(EquipmentType.CROSS_TRAINER),
@@ -78,11 +96,11 @@ private val INDOOR_BIKE_GRAPHS = listOf(
     DashboardMetricKey.CADENCE_STEP,
     DashboardMetricKey.SPEED,
     DashboardMetricKey.HEART_RATE,
-    DashboardMetricKey.DISTANCE,
     DashboardMetricKey.RESISTANCE,
 )
 
-private fun DashboardMetricKey.appliesTo(type: EquipmentType): Boolean =
+/** Whether equipment of [type] has this value at all. */
+internal fun DashboardMetricKey.appliesTo(type: EquipmentType): Boolean =
     when (this) {
         DashboardMetricKey.PACE,
         DashboardMetricKey.AVG_PACE,
@@ -92,6 +110,7 @@ private fun DashboardMetricKey.appliesTo(type: EquipmentType): Boolean =
         DashboardMetricKey.ASCENT,
         DashboardMetricKey.ASCENT_RATE,
         -> type.showsClimb
+        DashboardMetricKey.RESISTANCE -> type.showsResistance
         else -> true
     }
 

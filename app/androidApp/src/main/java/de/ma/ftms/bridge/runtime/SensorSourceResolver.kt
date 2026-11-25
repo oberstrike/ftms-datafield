@@ -46,9 +46,23 @@ internal data class WatchReadings(
     val timestampMillis: Long,
 )
 
-/** The watch's values, unless they are older than [WATCH_READINGS_MAX_AGE_MS]. */
-internal fun WatchReadings?.freshAt(nowMillis: Long): SensorReadings? =
-    this?.takeIf { nowMillis - it.timestampMillis <= WATCH_READINGS_MAX_AGE_MS }?.readings
+/**
+ * The watch's values that are still good at [nowMillis], or null if none is.
+ *
+ * Power and cadence count for [WATCH_READINGS_MAX_AGE_MS]. The heart rate counts for
+ * [WATCH_HEART_RATE_MAX_AGE_MS]: it moves by a few beats in that time, and the watch repeats an
+ * unchanged value only every three seconds over a link that delays messages by seconds, so a
+ * shorter limit would blank it again and again.
+ */
+internal fun WatchReadings?.freshAt(nowMillis: Long): SensorReadings? {
+    val ageMillis = nowMillis - (this ?: return null).timestampMillis
+    return when {
+        ageMillis <= WATCH_READINGS_MAX_AGE_MS -> readings
+        ageMillis <= WATCH_HEART_RATE_MAX_AGE_MS && readings.heartRateBpm != null ->
+            SensorReadings(heartRateBpm = readings.heartRateBpm)
+        else -> null
+    }
+}
 
 /**
  * Notes what the equipment and the watch each report and sets heart rate, power and cadence to the
@@ -72,7 +86,7 @@ internal fun FtmsSample.withResolvedSources(
     val watchReadings = watch.freshAt(nowMillis)
     val sources = settings.sensorSources(equipmentType)
     // What a watch calls cadence while running is the step rate.
-    val cadenceIsStepRate = equipmentType.showsPace
+    val cadenceIsStepRate = equipmentType.cadenceIsStepRate
     val cadenceFromWatch = sources.cadence == ValueSource.WATCH
 
     return fromEquipment.copy(
@@ -107,3 +121,4 @@ internal fun String?.toValueSource(default: ValueSource): ValueSource =
     this?.let { value -> ValueSource.entries.firstOrNull { it.name == value } } ?: default
 
 internal const val WATCH_READINGS_MAX_AGE_MS = 5_000L
+internal const val WATCH_HEART_RATE_MAX_AGE_MS = 15_000L

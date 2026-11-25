@@ -24,6 +24,7 @@ import de.ma.ftms.bridge.debug.BridgeLogger
 import de.ma.ftms.bridge.runtime.CCCD_UUID
 import de.ma.ftms.bridge.runtime.CROSS_TRAINER_DATA_UUID
 import de.ma.ftms.bridge.runtime.FITNESS_MACHINE_CONTROL_POINT_UUID
+import de.ma.ftms.bridge.runtime.FITNESS_MACHINE_STATUS_UUID
 import de.ma.ftms.bridge.runtime.FTMS_SERVICE_UUID
 import de.ma.ftms.bridge.runtime.INDOOR_BIKE_DATA_UUID
 import de.ma.ftms.bridge.runtime.RSC_MEASUREMENT_UUID
@@ -85,6 +86,9 @@ internal class TreadmillBleClient(
 
         /** A command written with [writeControlPoint] did not reach the equipment. */
         fun onControlPointWriteFailed()
+
+        /** The equipment reports a change of its state, such as a target set on its own controls. */
+        fun onMachineStatus(bytes: ByteArray)
         fun onBleDiagnostic(message: String)
 
         /** The equipment connection is unusable or was lost; the owner may reconnect. */
@@ -568,6 +572,10 @@ internal class TreadmillBleClient(
                     controlPoint = it
                     pendingSubscriptions.add(Subscription(it, carriesData = false))
                 }
+            // Tells what was changed on the equipment itself, so the app does not show a stale target.
+            ftmsService.getCharacteristic(FITNESS_MACHINE_STATUS_UUID)
+                ?.takeIf { controlPoint != null && it.supportsNotifications() }
+                ?.let { pendingSubscriptions.add(Subscription(it, carriesData = false)) }
         }
 
         gatt.getService(VENDOR_SERVICE_UUID)
@@ -748,6 +756,12 @@ internal class TreadmillBleClient(
         if (uuid == FITNESS_MACHINE_CONTROL_POINT_UUID) {
             callbacks.onBleDiagnostic("control_point_response bytes=${value.toHexPreview()}")
             callbacks.onControlPointResponse(value)
+            return
+        }
+
+        if (uuid == FITNESS_MACHINE_STATUS_UUID) {
+            callbacks.onBleDiagnostic("machine_status bytes=${value.toHexPreview()}")
+            callbacks.onMachineStatus(value)
             return
         }
 

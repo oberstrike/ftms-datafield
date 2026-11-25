@@ -9,7 +9,7 @@ Das Projekt besteht aus zwei Teilen:
 - einer Android-Bridge-App, die sich mit FTMS-Geräten verbindet, Sessions lokal speichert und Live-Werte über den Garmin-Connect-IQ-Companion-Kanal an die Uhr sendet
 - einem Garmin-Connect-IQ-Datenfeld als Quellcodeprojekt, das Bridge-Werte empfängt und eigene FIT Developer Fields schreibt
 
-Die Bridge liest das Gerät nur aus, mit einer Ausnahme: Beim Gerätetyp „Indoor Cycling“ kann sie auf deinen Wunsch eine Zielleistung über den FTMS Control Point `0x2AD9` setzen. An Laufbänder und Crosstrainer wird nie geschrieben, und Vendor-Steuerbefehle werden nicht gesendet.
+Die Bridge liest das Gerät nur aus, mit einer Ausnahme: Beim Gerätetyp „Indoor Cycling“ kann sie auf deinen Wunsch eine Zielleistung über den FTMS Control Point `0x2AD9` setzen, und setzt die letzte beim Start einer Session erneut. An Laufbänder und Crosstrainer wird nie geschrieben, und Vendor-Steuerbefehle werden nicht gesendet.
 
 ## Download v1.0.0
 
@@ -53,7 +53,12 @@ Die App speichert Sessions lokal und zeigt Verlauf, Diagramme und Diagnose-Logs.
 
 Im Tab `Geräte` wählst du, was das ausgewählte Gerät ist: `Laufband`, `Indoor Cycling` oder `Crosstrainer`. Nennt ein Gerät seinen Typ beim Advertising, ist er bei der Auswahl vorbelegt; ändern kannst du ihn, solange die Bridge gestoppt ist.
 
+- Während einer Session beginnt das Dashboard mit den Diagrammen, jedes mit seinem aktuellen Wert darüber; darunter folgen die Live-Werte, die Karte `Quellen` und der Status. Ohne Session zeigt es den Status und die letzte Session.
+- Start, Pause und Stopp sitzen in einer Leiste fest über der Navigation, zusammen mit dem Zustand der Bridge und der Zeit der laufenden Session. Im Dashboard ist die Leiste immer da und nennt vor dem Start Gerät und Uhr sowie das, was einen Start verhindert; in den anderen Tabs erscheint sie, solange eine Session läuft.
 - Das Dashboard hat für jeden Typ eine eigene Auswahl an Live-Werten und Diagrammen. Ein Indoor Bike beginnt mit Leistung, Kadenz, Geschwindigkeit, Herzfrequenz, Distanz und Widerstand, ohne Pace, Steigung und Höhenmeter. Unter `Einstellungen > Dashboard` passt du die Auswahl je Typ an.
+- Angeboten und gezeigt wird nur, was zum Typ gehört: keine Pace auf dem Bike, kein Widerstand auf dem Laufband, und die Kadenz heißt auf dem Laufband `Schrittfrequenz` (spm), sonst `Kadenz` (rpm).
+- Während einer Session lässt das Dashboard weg, was Gerät und Uhr bisher nicht geliefert haben: keine Kachel, kein Diagramm und keine Zeile unter `Quellen` für eine Herzfrequenz, die niemand misst. Sie erscheint, sobald der erste Wert ankommt.
+- Jedes Diagramm hat eine Werteachse mit runden Zahlen, darunter die Zeit seit Beginn der Session und darüber den aktuellen Wert, dazu Durchschnitt und Maximum, wo sie etwas aussagen. Lege einen Finger auf ein Diagramm, um den Wert zu diesem Zeitpunkt abzulesen. Die Distanz gibt es nur als Live-Wert: Als Diagramm wäre sie eine Linie, die nur steigt.
 - Jede Session wird mit ihrem Typ gespeichert. Der Verlauf zeigt den Typ, lässt unpassende Werte weg und lässt sich nach Typ filtern, sobald mehr als ein Typ gespeichert ist. Sessions aus älteren Versionen erhalten ihren Typ aus den enthaltenen Daten.
 - Die Leistungsschätzung für das Laufband gilt nur für Laufbänder.
 - Sendet das Gerät Daten eines anderen Typs als gewählt, weist das Dashboard darauf hin.
@@ -62,9 +67,16 @@ Im Tab `Geräte` wählst du, was das ausgewählte Gerät ist: `Laufband`, `Indoo
 
 Beim Typ `Indoor Cycling` zeigt das Dashboard die Karte `Zielleistung`, solange das Bike verbunden ist:
 
-- Tippe auf eine Schnellwahl, um diese Zielleistung zu setzen, oder ändere sie mit Plus und Minus in Schritten. Ohne Zielleistung beginnt der erste Schritt bei der Leistung, die das Bike gerade misst.
+- Die Karte steht direkt unter dem Leistungsdiagramm, dessen aktueller Wert die vom Bike gemessene Leistung ist. Ohne Leistungsdiagramm zeigt die Karte die gemessene Leistung selbst, neben der Zielleistung.
+- Tippe auf die Zielleistung, um sie als Zahl einzugeben. Bestätigen lässt sich nur ein Wert in dem Bereich, den das Bike meldet. Gesendet wird wattgenau, auch an ein Bike, das Schritte von etwa 5 W meldet: Ein solches Bike hält womöglich trotzdem 168 W (ein Wattbike Proton tut es). Erst wenn das Bike einen Wert zwischen seinen Schritten ablehnt, hält sich die App von da an an diese Schritte.
+- Die Knöpfe ändern die Zielleistung in zwei Schrittweiten: 1 W (dem Schritt des Bikes, sobald es einen Wert zwischen seinen Schritten abgelehnt hat), und der Schrittweite aus den Einstellungen. Sind beide gleich, gibt es nur ein Knopfpaar. Ohne Zielleistung beginnt der erste Schritt bei der Leistung, die das Bike gerade misst.
+- Tippe auf eine Schnellwahl, um diese Zielleistung zu setzen.
+- Das Leistungsdiagramm im Dashboard zeichnet die Zielleistung als dünne Stufenlinie neben der gemessenen Leistung.
 - Die Karte zeigt, ob das Bike die Zielleistung bestätigt oder abgelehnt hat, und welchen Bereich das Bike meldet.
-- Nach einem Reconnect innerhalb der Session wird die Zielleistung erneut gesetzt; beim Stoppen der Session wird sie vergessen. Die App hat keinen Knopf, um die Zielleistung abzuschalten; den Leistungsmodus verlässt du über die Bedienung des Bikes.
+- Wird eine pausierte Session fortgesetzt, sendet die App ihre Zielleistung erneut. So gilt sie nach der Pause wieder, auch wenn das Bike sie zwischendurch aufgegeben hat.
+- Eine anderswo eingestellte Zielleistung wird übernommen, sofern das Bike sie meldet (FTMS Fitness Machine Status, „Target Power Changed“): am Bike selbst oder von einer Uhr, die das Bike steuert. Die Karte zeigt dann, dass das Bike sie gemeldet hat, und die App sendet von sich aus nichts mehr, auch nicht nach einer Pause, bis du in der App wieder ein Ziel setzt. Wer das Ziel setzt, hat das Sagen; eine Uhr, die das Bike steuert, überschreibt, was andere Apps senden. FTMS kennt keine Abfrage der aktuellen Zielleistung; eine Änderung, während die App nicht verbunden ist, bleibt deshalb unbemerkt.
+- Nach einem Reconnect innerhalb der Session wird die Zielleistung der App erneut gesetzt. Eine neue Session beginnt ohne Zielleistung: Die App sendet nichts, bis du eine setzt, und zeigt eine an, sobald das Bike eine meldet. Die Zielleistung, die du zuletzt in der App auf diesem Bike gesetzt hast, steht als Vorschlag im Eingabefeld, wenn du auf die Zielleistung tippst.
+- Soll die App keine Zielleistung mehr setzen, tippe auf die Zielleistung und wähle `Kein Ziel`. Die App sendet dann nichts mehr; das Bike behält, was es zuletzt bekommen hat, den Leistungsmodus verlässt du also über die Bedienung des Bikes.
 - Unter `Einstellungen > Indoor Cycling` stehen die Schnellwahlen (bis zu 8, von 10 bis 2000 W; Standard sind 100, 150, 200 und 250 W) und die Schrittweite (5, 10 oder 25 W).
 
 Das Bike muss den FTMS Control Point mit „Set Target Power“ anbieten. Fehlt er, steht das auf der Karte.
@@ -75,10 +87,10 @@ Das Bike hält die Zielleistung nach seiner eigenen Messung. Zeigst du stattdess
 
 Die Uhr sendet ihre Herzfrequenz an das Telefon und dazu die Leistung und Kadenz, die sie für die laufende Aktivität hat. Dazu gehören Sensoren, die mit der Uhr gekoppelt sind, etwa ein Brustgurt oder Leistungsmesser-Pedale. Die App verbindet sich nicht selbst mit diesen Sensoren.
 
-- Die Dashboard-Karte `Quellen` zeigt für Herzfrequenz, Leistung und Kadenz den Wert des Geräts und den der Uhr nebeneinander. Tippe auf einen, um ihn zu verwenden. Dieselbe Auswahl steht unter `Einstellungen > Datenquellen`, getrennt für jeden Gerätetyp.
+- Während einer Session zeigt die Dashboard-Karte `Quellen` für Herzfrequenz, Leistung und Kadenz den Wert des Geräts und den der Uhr nebeneinander, soweit einer von beiden ihn liefert. Tippe auf einen, um ihn zu verwenden. Dieselbe Auswahl steht unter `Einstellungen > Datenquellen`, getrennt für jeden Gerätetyp.
 - Voreingestellt ist die Herzfrequenz von der Uhr, Leistung und Kadenz vom Gerät.
 - Der gewählte Wert gilt für die Anzeige, den Verlauf und die an die Uhr gesendeten Werte.
-- Liefert die gewählte Quelle 5 Sekunden lang nichts, bleibt der Wert leer. Die App wechselt nicht von selbst zur anderen Quelle.
+- Liefert die gewählte Quelle 5 Sekunden lang nichts, bleibt der Wert leer; die Herzfrequenz der Uhr bleibt 15 Sekunden stehen, weil sie sich langsam ändert und die Nachrichten der Uhr Sekunden brauchen können. Die App wechselt nicht von selbst zur anderen Quelle.
 - Beide Werte werden mit der Session gespeichert. Enthält eine Session beide, zeigt der Verlauf den Durchschnitt je Quelle, die Abweichung und ein Diagramm mit beiden Linien.
 - Die Leistungsschätzung für das Laufband zählt als Wert des Geräts.
 - Die Werte der Uhr erscheinen, solange das Gerät Daten sendet.
@@ -139,10 +151,20 @@ Mit `Einstellungen > Bridge-Verhalten > Aktivität der Uhr folgen` (standardmä�
 - Startest du die Aktivität an der Uhr, startet die Session. Öffnest du die App erst, während die Aktivität schon aufzeichnet, startet die Session innerhalb weniger Sekunden.
 - Stoppst du die Aktivität an der Uhr, pausiert die Session; setzt du sie fort, läuft die Session weiter. Auto-Pause der Uhr pausiert die Session nicht.
 - Speicherst oder verwirfst du die Aktivität, endet die Session.
-- Beim Start der Aktivität muss die App auf dem Telefon geöffnet sein, Laufband und Uhr müssen ausgewählt sein. Die Uhr braucht das Datenfeld dieser Version; ein älteres Datenfeld meldet die Aktivität nicht.
+- Beim Start der Aktivität muss die App auf dem Telefon geöffnet sein, außer sie wartet im Hintergrund (siehe unten). Laufband und Uhr müssen ausgewählt sein. Die Uhr braucht das Datenfeld dieser Version; ein älteres Datenfeld meldet die Aktivität nicht.
 - Ohne Session auf dem Telefon verbindet sich das Datenfeld selbst mit dem Laufband. Startet die Session, gibt es die Verbindung an das Telefon ab und zeigt `PWAIT`, bis das Telefon Daten hat; das kann ein paar Sekunden dauern.
 - `Start`, `Pause` und `Stop` in der App funktionieren weiter. Was du dort tust, bleibt bestehen, bis sich der Zustand der Aktivität an der Uhr wieder ändert.
 - Läuft beim Start der Aktivität bereits eine Session, läuft sie einfach weiter. Soll die Session genau die Aktivität abdecken, lass `Automatisch starten` aus und überlass den Start der Uhr.
+
+#### Im Hintergrund warten
+
+Android stellt der App die Nachrichten der Uhr nur zu, solange die App zu sehen ist oder einen Vordergrunddienst betreibt. Mit `Einstellungen > Bridge-Verhalten > Im Hintergrund auf die Uhr warten` (standardmäßig aus) behält die App einen solchen Dienst, nachdem du sie einmal geöffnet hast. Die Session startet dann mit der Aktivität, ohne dass du die App erneut öffnest.
+
+- Während sie wartet, zeigt die Benachrichtigung `FTMS Bridge wartet` das an. `Warten beenden` dort beendet es, bis du die App das nächste Mal öffnest.
+- Während des Wartens sucht die App nicht nach dem Laufband und verbindet sich nicht damit. Sie verbindet sich, sobald die Aktivität startet.
+- Nach einer Session wartet die App wieder, auf die nächste Aktivität.
+- Das Warten endet, wenn das Telefon neu startet oder Android die App schließt; öffne die App einmal, um es wieder aufzunehmen. Telefone mit strenger Akkuverwaltung schließen die App unter Umständen nach einiger Zeit, wenn du sie dort nicht ausnimmst.
+- Nötig sind die Bluetooth-Berechtigung sowie ein ausgewähltes Laufband und eine ausgewählte Uhr. Getestet im Emulator mit simulierter Aktivität, noch nicht auf einem Telefon mit Uhr.
 
 ### Automatisch stoppen
 
