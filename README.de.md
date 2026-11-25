@@ -195,7 +195,7 @@ Der Parser unterstützt diese standardisierten FTMS-Characteristics:
 - Treadmill Data `0x2ACD`
 - Cross Trainer / Elliptical Data `0x2ACE`
 
-Die aktuelle Android-Bridge wurde vor allem mit dem Darwin TM70 Touch / `FS-BC11B7` Laufband getestet. Die Indoor-Cycling-Ansicht und die Zielleistung wurden bisher nur mit einem simulierten FTMS-Bike getestet, noch nicht mit einem echten. Leistung und Kadenz von der Uhr wurden nur mit simulierten Uhrenwerten getestet; welche Werte eine Uhr für welche Aktivität und welchen Sensor liefert, ist an einer echten noch nicht bestätigt. Der Laufsensor für die Uhr wurde mit einer Forerunner 970 getestet: Sie verbindet ihn und bekommt die Werte, solange ihre Telefonverbindung aus ist. Wie die Uhr die Werte in der aufgezeichneten Aktivität verwendet, ist noch nicht bestätigt.
+Die aktuelle Android-Bridge wurde vor allem mit dem Darwin TM70 Touch / `FS-BC11B7` Laufband getestet. Indoor Cycling wurde mit einem Wattbike Proton und einer Forerunner 970 gefahren: Die Session folgt der Aktivität der Uhr, das Bike bestätigt die Zielleistung der App und hält sie wattgenau, und Herzfrequenz, Leistung und Kadenz der Uhr kommen etwa alle 2 Sekunden an. Dass die App einer von der Uhr gesetzten Zielleistung folgt, wurde bisher nur mit einem simulierten Bike getestet. Der Laufsensor für die Uhr wurde mit einer Forerunner 970 getestet: Sie verbindet ihn und bekommt die Werte, solange ihre Telefonverbindung aus ist. Wie die Uhr die Werte in der aufgezeichneten Aktivität verwendet, ist noch nicht bestätigt.
 
 ## Garmin-Datenfelder
 
@@ -210,6 +210,8 @@ Das Connect-IQ-Projekt schreibt eigene FIT Developer Fields, zum Beispiel:
 - `ftms_cad_step`
 - `ftms_incline`
 - `ftms_machine`
+
+Die `hm_*`-Felder werden bei einem Indoor Bike nicht geschrieben, da es keine Höhenmeter gibt.
 
 `hm_quelle` bedeutet:
 

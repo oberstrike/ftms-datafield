@@ -140,9 +140,12 @@ class FtmsFitWriter {
 
         var hm = _ascentTracker.update(sample);
 
-        setField(_hmRecordField, hm);
-        setField(_hmSessionField, hm);
-        setField(_hmSourceField, _ascentTracker.source);
+        // An indoor bike climbs nothing; a line of zeros in the activity would only be noise.
+        if (sample.kind != FtmsMachineKind.INDOOR_BIKE) {
+            setField(_hmRecordField, hm);
+            setField(_hmSessionField, hm);
+            setField(_hmSourceField, _ascentTracker.source);
+        }
         setField(_machineField, sample.kind);
 
         if (sample.powerW != null) {

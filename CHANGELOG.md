@@ -48,6 +48,7 @@ Tools:
 
 Garmin data field:
 
+- No longer writes the ascent fields (`hm_gelaufen`, `hm_gelaufen_summe`, `hm_quelle`) for an indoor bike, where they were a line of zeros.
 - Shows `PAUSE` while the phone bridge is paused.
 - Ignores samples that arrive out of order.
 - Sends the watch heart rate to the phone only while the bridge is active.
