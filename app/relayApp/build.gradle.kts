@@ -15,8 +15,8 @@ android {
         applicationId = "de.ma.ftms.relay"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10100
+        versionName = "1.1.0"
     }
 
     buildTypes {

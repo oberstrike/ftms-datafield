@@ -9,28 +9,30 @@ Das Projekt besteht aus zwei Teilen:
 - einer Android-Bridge-App, die sich mit FTMS-Geräten verbindet, Sessions lokal speichert und Live-Werte über den Garmin-Connect-IQ-Companion-Kanal an die Uhr sendet
 - einem Garmin-Connect-IQ-Datenfeld als Quellcodeprojekt, das Bridge-Werte empfängt und eigene FIT Developer Fields schreibt
 
-Die Bridge liest das Gerät nur aus, mit einer Ausnahme: Beim Gerätetyp „Indoor Cycling“ kann sie auf deinen Wunsch eine Zielleistung über den FTMS Control Point `0x2AD9` setzen, und setzt die letzte beim Start einer Session erneut. An Laufbänder und Crosstrainer wird nie geschrieben, und Vendor-Steuerbefehle werden nicht gesendet.
+Die Bridge liest das Gerät aus und schreibt nur dort, wo du es verlangst. Beim Gerätetyp „Indoor Cycling“ kann sie eine Zielleistung über den FTMS Control Point `0x2AD9` setzen, und setzt die letzte beim Start einer Session erneut. Bei einem Laufband kann sie Geschwindigkeit und Steigung stellen, sobald du das einschaltest (`Einstellungen > Laufband`, standardmäßig aus); sie startet und stoppt nie ein Band. An Crosstrainer wird nie geschrieben, und Vendor-Steuerbefehle werden nicht gesendet.
 
-## Download v1.0.0
+## Download v1.1.0
 
-Version 1.0.0 stellt die Android-Bridge als debug-signierte APK bereit:
+Version 1.1.0 stellt beide Android-Apps als debug-signierte APKs bereit und das Datenfeld fertig gebaut für die Forerunner 970:
 
-- [ftms-bridge-android-v1.0.0-debug.apk](https://github.com/oberstrike/ftms-datafield/releases/download/v1.0.0/ftms-bridge-android-v1.0.0-debug.apk)
-- [SHA256SUMS.txt](https://github.com/oberstrike/ftms-datafield/releases/download/v1.0.0/SHA256SUMS.txt)
-- [Release-Seite](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.0.0)
+- [ftms-bridge-android-v1.1.0-debug.apk](https://github.com/oberstrike/ftms-datafield/releases/download/v1.1.0/ftms-bridge-android-v1.1.0-debug.apk): die Bridge-App
+- [ftms-relay-android-v1.1.0-debug.apk](https://github.com/oberstrike/ftms-datafield/releases/download/v1.1.0/ftms-relay-android-v1.1.0-debug.apk): FTMS Relay für ein zweites Telefon, nur für den Laufsensor nötig (siehe `Laufsensor für die Uhr`)
+- [FtmsBridgeField-fr970-v1.1.0.prg](https://github.com/oberstrike/ftms-datafield/releases/download/v1.1.0/FtmsBridgeField-fr970-v1.1.0.prg): das Connect-IQ-Datenfeld für die Forerunner 970, zum Kopieren auf die Uhr
+- [SHA256SUMS.txt](https://github.com/oberstrike/ftms-datafield/releases/download/v1.1.0/SHA256SUMS.txt)
+- [Release-Seite](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.1.0)
 
-Wichtig: v1.0.0 veröffentlicht aktuell die Android-APK. Das Garmin-Connect-IQ-Datenfeld wird für die Connect-IQ-Store-Prüfung vorbereitet; bis zur Freigabe kann es aus dem Quellcode gebaut und sideloaded werden.
+Wichtig: Das Datenfeld ist nicht im Connect IQ Store. Die `.prg`-Datei des Releases läuft nur auf der Forerunner 970; schließe die Uhr an einen Rechner an und kopiere die Datei nach `GARMIN/APPS/`. Für andere Uhren baust du es aus dem Quellcode, siehe `Garmin-Datenfeld bauen`.
 
 ## Android-App installieren
 
-1. Öffne die [v1.0.0 Release-Seite](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.0.0) auf deinem Android-Telefon.
-2. Lade `ftms-bridge-android-v1.0.0-debug.apk` herunter.
+1. Öffne die [v1.1.0 Release-Seite](https://github.com/oberstrike/ftms-datafield/releases/tag/v1.1.0) auf deinem Android-Telefon.
+2. Lade `ftms-bridge-android-v1.1.0-debug.apk` herunter.
 3. Falls Android die APK blockiert, erlaube die Installation aus unbekannten Quellen für den verwendeten Browser oder Dateimanager.
 4. Installiere die APK.
 5. Öffne `FTMS Bridge`.
 6. Erteile die angeforderten Bluetooth-Berechtigungen.
 
-Android kann warnen, dass dies eine Debug-App oder eine App aus unbekannter Quelle ist. Das ist bei v1.0.0 erwartbar, weil die APK noch nicht über Google Play verteilt wird.
+Android kann warnen, dass dies eine Debug-App oder eine App aus unbekannter Quelle ist. Das ist erwartbar, weil die APK noch nicht über Google Play verteilt wird.
 
 ## Bridge verwenden
 
@@ -205,7 +207,7 @@ Dasselbe Relais als Android-App, für ein übriges Telefon, das in der Nähe des
 
     Laufband --FTMS--> Telefon (Bridge-App) --Laufsensor--> zweites Telefon (FTMS Relay) --Laufsensor--> Uhr
 
-1. `relayApp-debug.apk` auf dem zweiten Telefon installieren, öffnen, `Relay starten` antippen und „Geräte in der Nähe" erlauben. Das zweite Telefon darf keines sein, mit dem die Uhr gekoppelt ist.
+1. FTMS Relay auf dem zweiten Telefon installieren (`ftms-relay-android-v1.1.0-debug.apk` aus dem Release oder die selbst gebaute `relayApp-debug.apk`), öffnen, `Relay starten` antippen und „Geräte in der Nähe" erlauben. Das zweite Telefon darf keines sein, mit dem die Uhr gekoppelt ist.
 2. `Hintergrundbetrieb erlauben` antippen, falls die App es anbietet. Auf Telefonen, die selbst entscheiden, welche Apps starten dürfen (Honor, Huawei, Xiaomi), der App zusätzlich in den Systemeinstellungen den automatischen Start erlauben; sonst kommt das Relais nach einem Neustart des Telefons nicht von selbst zurück, und du musst die App einmal öffnen.
 3. Weiter mit den Schritten 2 bis 4 oben; an der Uhr das zweite Telefon als Laufsensor auswählen.
 
