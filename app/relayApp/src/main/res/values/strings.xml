@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">FTMS Relay</string>
+    <string name="intro">Passes the running sensor of FTMS Bridge on to the watch. This phone stays near the treadmill; on the watch, add this phone as the foot pod, not the phone that runs the bridge.</string>
+
+    <string name="label_source">Bridge phone</string>
+    <string name="source_off">Off</string>
+    <string name="source_permission_missing">Permission missing</string>
+    <string name="source_bluetooth_off">Bluetooth is off</string>
+    <string name="source_searching">Searching</string>
+    <string name="source_connecting">Connecting</string>
+    <string name="source_connected">Connected</string>
+
+    <string name="label_sensor">Sensor for the watch</string>
+    <string name="sensor_off">Off</string>
+    <string name="sensor_unsupported">This phone cannot act as a sensor</string>
+    <string name="sensor_permission_missing">Permission missing</string>
+    <string name="sensor_advertising">Waiting for the watch</string>
+    <string name="sensor_connected">Watch connected</string>
+    <string name="sensor_failed">Could not be set up</string>
+
+    <string name="label_measurements">Measurements</string>
+    <string name="measurements_none">None yet</string>
+    <string name="measurements_counts">Received: %1$d, passed on to the watch: %2$d</string>
+    <string name="measurements_last">%1$s: %2$s km/h, step rate %3$d/min, %4$d m</string>
+    <string name="measurements_last_without_distance">%1$s: %2$s km/h, step rate %3$d/min</string>
+
+    <string name="action_start">Start relay</string>
+    <string name="action_stop">Stop relay</string>
+    <string name="permission_denied">Without the Bluetooth permission the relay cannot work. Allow \"Nearby devices\" for this app in the system settings.</string>
+    <string name="battery_text">Android may stop the relay in standby to save battery.</string>
+    <string name="battery_action">Allow running in the background</string>
+    <string name="label_events">Events</string>
+
+    <string name="notification_channel">Relay</string>
+    <string name="notification_title">FTMS Relay is running</string>
+    <string name="notification_text">Bridge phone: %1$s · Watch: %2$s</string>
+    <string name="notification_stop">Stop</string>
+</resources>

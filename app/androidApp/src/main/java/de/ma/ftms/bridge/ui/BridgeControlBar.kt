@@ -103,6 +103,14 @@ internal fun BridgeControlBar(
                         Button(enabled = startBlockReason == null, onClick = onStart, modifier = Modifier.weight(1f)) {
                             Text(strings.common.start)
                         }
+                    // The activity on the watch started this session and decides about its pause and end.
+                    state.watchLed ->
+                        Text(
+                            strings.dashboard.watchLedSession,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                        )
                     else -> {
                         if (state.paused) {
                             Button(onClick = onStart, modifier = Modifier.weight(1f)) {

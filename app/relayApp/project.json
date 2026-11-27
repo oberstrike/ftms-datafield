@@ -1,0 +1,29 @@
+{
+  "name": "relayApp",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "app/relayApp/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:relayApp:assembleDebug", "cwd": "." },
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build"]
+    },
+    "install": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:relayApp:installDebug", "cwd": "." },
+      "dependsOn": ["build"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "./gradlew :app:relayApp:testDebugUnitTest", "cwd": "." },
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": ["{projectRoot}/build/test-results", "{projectRoot}/build/reports/tests"]
+    }
+  },
+  "tags": ["type:app", "platform:android"]
+}

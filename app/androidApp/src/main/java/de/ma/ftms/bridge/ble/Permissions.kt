@@ -42,9 +42,3 @@ fun advertisePermissions(): Array<String> =
     } else {
         emptyArray()
     }
-
-/** True when the phone may be made visible as a Bluetooth sensor. */
-fun hasAdvertisePermission(context: Context): Boolean =
-    advertisePermissions().all {
-        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-    }

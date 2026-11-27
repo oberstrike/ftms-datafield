@@ -1,5 +1,7 @@
 package de.ma.ftms.core
 
+import kotlin.math.abs
+
 /**
  * What a treadmill with the FitShow protocol reports about itself next to its FTMS data.
  *
@@ -54,10 +56,19 @@ object FitShowStatusParser {
 /**
  * Turns a running count of steps into a step rate, in steps per minute.
  *
- * The rate is what the count gained over the last [windowMillis]. It is unknown (null) until the
- * count was seen to rise at all, so equipment that does not count steps reports no rate rather
- * than zero, and until [minSpanMillis] have been observed. Once the count has not risen for
- * [idleMillis], the rate is zero: nobody is walking. A count that drops starts over.
+ * The rate is the slope of the straight line that fits the counts of the last [windowMillis] best.
+ * A count arrives in whole steps at the times the equipment happens to report, so the difference
+ * between the two ends of the window jitters by several steps per minute; the fitted line uses
+ * every report and is calmer for the same window.
+ *
+ * A long window alone would trail a change of rhythm by its own length. So whenever the last
+ * [changeWindowMillis] on their own show a rate more than [changeThresholdSpm] away from the whole
+ * window's, the walker has changed rhythm: everything older is dropped and the recent rate counts.
+ *
+ * The rate is unknown (null) until the count was seen to rise at all, so equipment that does not
+ * count steps reports no rate rather than zero, and until [minSpanMillis] have been observed. Once
+ * the count has not risen for [idleMillis], the rate is zero: nobody is walking. When it rises
+ * again, the observation starts over, as it does when the count drops.
  *
  * All times are milliseconds of one clock. Not thread-safe.
  */
@@ -65,13 +76,17 @@ class StepRateEstimator(
     private val windowMillis: Long = 15_000L,
     private val minSpanMillis: Long = 5_000L,
     private val idleMillis: Long = 4_000L,
+    private val changeWindowMillis: Long = 5_000L,
+    private val changeThresholdSpm: Double = 18.0,
 ) {
     private val counts = ArrayDeque<Pair<Long, Int>>()
     private var lastRiseAtMillis: Long? = null
+    private var observedEnough = false
 
     fun reset() {
         counts.clear()
         lastRiseAtMillis = null
+        observedEnough = false
     }
 
     fun update(stepCount: Int, nowMillis: Long): Double? {
@@ -79,6 +94,13 @@ class StepRateEstimator(
         if (previous != null && stepCount < previous.second) {
             reset()
         } else if (previous != null && stepCount > previous.second) {
+            val lastRiseAt = lastRiseAtMillis
+            if (lastRiseAt != null && nowMillis - lastRiseAt > idleMillis) {
+                // Walking again after a standstill: the flat stretch says nothing about the new rhythm.
+                counts.clear()
+                counts.addLast(previous)
+                observedEnough = false
+            }
             lastRiseAtMillis = nowMillis
         }
 
@@ -91,11 +113,47 @@ class StepRateEstimator(
         if (nowMillis - lastRiseAt > idleMillis) {
             return 0.0
         }
-        val (firstAt, firstCount) = counts.first()
-        val spanMillis = nowMillis - firstAt
-        if (spanMillis < minSpanMillis) {
-            return null
+        val spanMillis = nowMillis - counts.first().first
+        if (!observedEnough) {
+            if (spanMillis < minSpanMillis) {
+                return null
+            }
+            observedEnough = true
         }
-        return (stepCount - firstCount) * 60_000.0 / spanMillis
+
+        val rate = stepsPerMinute(counts) ?: return null
+        if (spanMillis * 10 <= changeWindowMillis * 13) {
+            // The recent stretch is most of the window; the two cannot disagree in a meaningful way.
+            return rate
+        }
+        val recent = counts.filter { nowMillis - it.first <= changeWindowMillis }
+        val recentRate = if (recent.size >= MIN_POINTS_FOR_A_CHANGE) stepsPerMinute(recent) else null
+        if (recentRate == null || abs(recentRate - rate) <= changeThresholdSpm) {
+            return rate
+        }
+        while (counts.size > recent.size) {
+            counts.removeFirst()
+        }
+        return recentRate
+    }
+
+    /** The slope of the least-squares line through [points], or null if they share one moment. */
+    private fun stepsPerMinute(points: List<Pair<Long, Int>>): Double? {
+        val (firstAt, firstCount) = points.first()
+        val meanTime = points.sumOf { (it.first - firstAt).toDouble() } / points.size
+        val meanCount = points.sumOf { (it.second - firstCount).toDouble() } / points.size
+        var covariance = 0.0
+        var variance = 0.0
+        for ((at, count) in points) {
+            val time = (at - firstAt) - meanTime
+            covariance += time * ((count - firstCount) - meanCount)
+            variance += time * time
+        }
+        return if (variance > 0.0) covariance / variance * 60_000.0 else null
+    }
+
+    private companion object {
+        /** Fewer reports than this in the recent stretch are too few to call a change of rhythm. */
+        const val MIN_POINTS_FOR_A_CHANGE = 6
     }
 }

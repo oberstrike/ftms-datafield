@@ -52,17 +52,17 @@ class HistoryMetricCalculationsTest {
 
     @Test
     fun allTimeTotalsAreZeroForEmptyHistory() {
-        val totals = allTimeHistoryTotals(emptyList())
+        val totals = historyTotals(emptyList())
 
         assertEquals(0, totals.sessionCount)
-        assertEquals(0.0, totals.totalDistanceM)
-        assertEquals(0.0, totals.totalAscentM)
-        assertEquals(0L, totals.totalDurationMillis)
+        assertEquals(0.0, totals.distanceM)
+        assertEquals(0.0, totals.ascentM)
+        assertEquals(0L, totals.durationMillis)
     }
 
     @Test
     fun allTimeTotalsSumStoppedSessions() {
-        val totals = allTimeHistoryTotals(
+        val totals = historyTotals(
             listOf(
                 session(
                     sessionId = "first",
@@ -82,14 +82,14 @@ class HistoryMetricCalculationsTest {
         )
 
         assertEquals(2, totals.sessionCount)
-        assertEquals(4_600.0, totals.totalDistanceM)
-        assertEquals(75.0, totals.totalAscentM)
-        assertEquals(210_000L, totals.totalDurationMillis)
+        assertEquals(4_600.0, totals.distanceM)
+        assertEquals(75.0, totals.ascentM)
+        assertEquals(210_000L, totals.durationMillis)
     }
 
     @Test
     fun allTimeTotalsIncludeInterruptedAndRunningSessions() {
-        val totals = allTimeHistoryTotals(
+        val totals = historyTotals(
             listOf(
                 session(
                     sessionId = "interrupted",
@@ -112,9 +112,9 @@ class HistoryMetricCalculationsTest {
         )
 
         assertEquals(2, totals.sessionCount)
-        assertEquals(1_300.0, totals.totalDistanceM)
-        assertEquals(14.0, totals.totalAscentM)
-        assertEquals(90_000L, totals.totalDurationMillis)
+        assertEquals(1_300.0, totals.distanceM)
+        assertEquals(14.0, totals.ascentM)
+        assertEquals(90_000L, totals.durationMillis)
     }
 
     private fun sample(
@@ -232,6 +232,6 @@ class HistoryMetricCalculationsTest {
         assertEquals(listOf(ride), filterSessionsByType(sessions, EquipmentType.INDOOR_BIKE))
         assertEquals(listOf(run, unknown), filterSessionsByType(sessions, EquipmentType.TREADMILL))
         assertEquals(sessions, filterSessionsByType(sessions, null))
-        assertEquals(1, allTimeHistoryTotals(filterSessionsByType(sessions, EquipmentType.INDOOR_BIKE)).sessionCount)
+        assertEquals(1, historyTotals(filterSessionsByType(sessions, EquipmentType.INDOOR_BIKE)).sessionCount)
     }
 }

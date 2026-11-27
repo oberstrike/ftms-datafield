@@ -3,10 +3,12 @@ package de.ma.ftms.bridge
 import de.ma.ftms.bridge.runtime.AutoStartPolicy
 import de.ma.ftms.bridge.runtime.BridgeSettings
 import de.ma.ftms.bridge.runtime.BridgeUiState
+import de.ma.ftms.bridge.runtime.EquipmentType
 import de.ma.ftms.bridge.runtime.GarminConnectProblem
 import de.ma.ftms.bridge.runtime.autoStartWatchAddress
 import de.ma.ftms.bridge.runtime.isBridgeStartPossible
 import de.ma.ftms.bridge.runtime.isEquipmentMoving
+import de.ma.ftms.bridge.runtime.standbyWatchAddress
 import de.ma.ftms.core.FtmsSample
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -165,6 +167,20 @@ class AutoStartPolicyTest {
         assertNull(autoStartWatchAddress(ready.copy(permissionsGranted = false), appVisible = true))
         assertNull(autoStartWatchAddress(ready.copy(bleAvailable = false), appVisible = true))
         assertNull(autoStartWatchAddress(ready.copy(selectedTreadmillAddress = null), appVisible = true))
+    }
+
+    @Test
+    fun aTreadmillToBeSteeredIsHeldWithoutAutoStartButDoesNotStartASession() {
+        val steered = readyState().copy(settings = BridgeSettings(autoStart = false, treadmillControl = true))
+
+        assertEquals("AA:BB", standbyWatchAddress(steered, appVisible = true))
+        assertNull(autoStartWatchAddress(steered, appVisible = true))
+        assertNull(standbyWatchAddress(steered, appVisible = false))
+        assertNull(standbyWatchAddress(steered.copy(running = true), appVisible = true))
+        // The switch is about treadmills; a bike is held only for auto-start.
+        assertNull(standbyWatchAddress(steered.copy(selectedEquipmentType = EquipmentType.INDOOR_BIKE), appVisible = true))
+        assertNull(standbyWatchAddress(readyState().copy(settings = BridgeSettings()), appVisible = true))
+        assertEquals("AA:BB", standbyWatchAddress(readyState(), appVisible = true))
     }
 
     @Test

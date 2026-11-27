@@ -55,6 +55,19 @@ data class SessionSampleRecord(
     val watch: SensorReadings? = null,
 )
 
+/**
+ * What the samples of a session come to, for a list of sessions that does not load the samples.
+ * Every value is null where no sample holds one.
+ */
+data class SessionAverages(
+    /** The offset of the last sample: how long the session recorded. */
+    val recordedMillis: Long? = null,
+    val powerW: Double? = null,
+    val heartRateBpm: Double? = null,
+    /** Revolutions or steps per minute, whichever the equipment counts. */
+    val cadence: Double? = null,
+)
+
 data class SessionStatsSnapshot(
     val packetCount: Int,
     val sendSuccessCount: Int,

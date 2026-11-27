@@ -125,6 +125,9 @@ internal class BridgePreferences(context: Context) {
                 KEY_SETTINGS_DASHBOARD_CHART_TIMESPAN,
                 null,
             ).toDashboardChartTimespan(),
+            historyCharts = EquipmentType.entries.associateWith { type ->
+                loadMetricList(historyChartsKey(type), defaultHistoryCharts(type))
+            },
             targetPowerPresets = preferences.getString(KEY_SETTINGS_TARGET_POWER_PRESETS, null)
                 ?.let { raw -> sanitizeTargetPowerPresets(raw.split(',').mapNotNull { it.trim().toIntOrNull() }) }
                 ?: DEFAULT_TARGET_POWER_PRESETS,
@@ -132,7 +135,47 @@ internal class BridgePreferences(context: Context) {
                 KEY_SETTINGS_TARGET_POWER_STEP,
                 DEFAULT_TARGET_POWER_STEP_WATTS,
             ).takeIf { it in TARGET_POWER_STEP_OPTIONS } ?: DEFAULT_TARGET_POWER_STEP_WATTS,
+            treadmillControl = preferences.getBoolean(KEY_SETTINGS_TREADMILL_CONTROL, BridgeSettings().treadmillControl),
+            treadmillSpeedPresets = loadTreadmillPresets(TreadmillSetting.SPEED, KEY_SETTINGS_TREADMILL_SPEED_PRESETS),
+            treadmillInclinePresets = loadTreadmillPresets(TreadmillSetting.INCLINE, KEY_SETTINGS_TREADMILL_INCLINE_PRESETS),
+            treadmillSpeedStep = preferences.getInt(
+                KEY_SETTINGS_TREADMILL_SPEED_STEP,
+                DEFAULT_TREADMILL_SPEED_STEP,
+            ).takeIf { it in TREADMILL_SPEED_STEP_OPTIONS } ?: DEFAULT_TREADMILL_SPEED_STEP,
+            treadmillConfirmLargeIncrease = preferences.getBoolean(
+                KEY_SETTINGS_TREADMILL_CONFIRM_LARGE_INCREASE,
+                BridgeSettings().treadmillConfirmLargeIncrease,
+            ),
+            treadmillRamp = preferences.getString(KEY_SETTINGS_TREADMILL_RAMP, null).toTreadmillRampProfile(),
+            treadmillFollowWorkout = preferences.getBoolean(
+                KEY_SETTINGS_TREADMILL_FOLLOW_WORKOUT,
+                BridgeSettings().treadmillFollowWorkout,
+            ),
+            treadmillFollowMode = preferences.getString(KEY_SETTINGS_TREADMILL_FOLLOW_MODE, null).toWorkoutTransitionMode(),
+            treadmillFollowTransitionSeconds = preferences.getInt(KEY_SETTINGS_TREADMILL_FOLLOW_TRANSITION_SECONDS, 0)
+                .takeIf { it in TREADMILL_FOLLOW_TRANSITION_OPTIONS } ?: 0,
+            treadmillFollowShortStepSeconds = preferences.getInt(
+                KEY_SETTINGS_TREADMILL_FOLLOW_SHORT_STEP_SECONDS,
+                DEFAULT_TREADMILL_FOLLOW_SHORT_STEP_SECONDS,
+            ).takeIf { it in TREADMILL_FOLLOW_SHORT_STEP_OPTIONS } ?: DEFAULT_TREADMILL_FOLLOW_SHORT_STEP_SECONDS,
+            treadmillFollowMaxSpeed = preferences.getInt(
+                KEY_SETTINGS_TREADMILL_FOLLOW_MAX_SPEED,
+                DEFAULT_TREADMILL_FOLLOW_MAX_SPEED,
+            ).takeIf { it in TREADMILL_FOLLOW_MAX_SPEED_OPTIONS } ?: DEFAULT_TREADMILL_FOLLOW_MAX_SPEED,
+            treadmillFollowTone = preferences.getBoolean(
+                KEY_SETTINGS_TREADMILL_FOLLOW_TONE,
+                BridgeSettings().treadmillFollowTone,
+            ),
+            workoutScreenFields = workoutScreenFieldsFrom(
+                loadMetricList(KEY_SETTINGS_WORKOUT_SCREEN_FIELDS, DEFAULT_WORKOUT_SCREEN_FIELDS),
+            ),
         )
+
+    /** The stored quick choices of [setting]; its defaults while none were stored. An emptied list stays empty. */
+    private fun loadTreadmillPresets(setting: TreadmillSetting, key: String): List<Int> =
+        preferences.getString(key, null)
+            ?.let { raw -> sanitizeTreadmillPresets(setting, raw.split(',').mapNotNull { it.trim().toIntOrNull() }) }
+            ?: setting.defaultPresets
 
     fun saveSettings(settings: BridgeSettings) {
         preferences.edit {
@@ -164,8 +207,24 @@ internal class BridgePreferences(context: Context) {
                 putString(dashboardGraphsKey(type), layout.graphs.joinToString(",") { it.name })
             }
             putString(KEY_SETTINGS_DASHBOARD_CHART_TIMESPAN, settings.dashboardChartTimespan.name)
+            EquipmentType.entries.forEach { type ->
+                putString(historyChartsKey(type), settings.historyCharts(type).joinToString(",") { it.name })
+            }
             putString(KEY_SETTINGS_TARGET_POWER_PRESETS, settings.targetPowerPresets.joinToString(","))
             putInt(KEY_SETTINGS_TARGET_POWER_STEP, settings.targetPowerStepWatts)
+            putBoolean(KEY_SETTINGS_TREADMILL_CONTROL, settings.treadmillControl)
+            putString(KEY_SETTINGS_TREADMILL_SPEED_PRESETS, settings.treadmillSpeedPresets.joinToString(","))
+            putString(KEY_SETTINGS_TREADMILL_INCLINE_PRESETS, settings.treadmillInclinePresets.joinToString(","))
+            putInt(KEY_SETTINGS_TREADMILL_SPEED_STEP, settings.treadmillSpeedStep)
+            putBoolean(KEY_SETTINGS_TREADMILL_CONFIRM_LARGE_INCREASE, settings.treadmillConfirmLargeIncrease)
+            putString(KEY_SETTINGS_TREADMILL_RAMP, settings.treadmillRamp.name)
+            putBoolean(KEY_SETTINGS_TREADMILL_FOLLOW_WORKOUT, settings.treadmillFollowWorkout)
+            putString(KEY_SETTINGS_TREADMILL_FOLLOW_MODE, settings.treadmillFollowMode.name)
+            putInt(KEY_SETTINGS_TREADMILL_FOLLOW_TRANSITION_SECONDS, settings.treadmillFollowTransitionSeconds)
+            putInt(KEY_SETTINGS_TREADMILL_FOLLOW_SHORT_STEP_SECONDS, settings.treadmillFollowShortStepSeconds)
+            putInt(KEY_SETTINGS_TREADMILL_FOLLOW_MAX_SPEED, settings.treadmillFollowMaxSpeed)
+            putBoolean(KEY_SETTINGS_TREADMILL_FOLLOW_TONE, settings.treadmillFollowTone)
+            putString(KEY_SETTINGS_WORKOUT_SCREEN_FIELDS, settings.workoutScreenFields.joinToString(",") { it.name })
         }
     }
 
@@ -200,6 +259,9 @@ internal class BridgePreferences(context: Context) {
     private fun dashboardGraphsKey(type: EquipmentType): String =
         if (type == EquipmentType.TREADMILL) KEY_SETTINGS_DASHBOARD_GRAPHS else "${KEY_SETTINGS_DASHBOARD_GRAPHS}_${type.name.lowercase()}"
 
+    private fun historyChartsKey(type: EquipmentType): String =
+        "settings_history_charts_${type.name.lowercase()}"
+
     companion object {
         private const val KEY_TREADMILL_ADDRESS = "selected_treadmill_address"
         private const val KEY_EQUIPMENT_TYPE = "selected_equipment_type"
@@ -230,6 +292,19 @@ internal class BridgePreferences(context: Context) {
         private const val KEY_SETTINGS_DASHBOARD_CHART_TIMESPAN = "settings_dashboard_chart_timespan"
         private const val KEY_SETTINGS_TARGET_POWER_PRESETS = "settings_target_power_presets"
         private const val KEY_SETTINGS_TARGET_POWER_STEP = "settings_target_power_step"
+        private const val KEY_SETTINGS_TREADMILL_CONTROL = "settings_treadmill_control"
+        private const val KEY_SETTINGS_TREADMILL_SPEED_PRESETS = "settings_treadmill_speed_presets"
+        private const val KEY_SETTINGS_TREADMILL_INCLINE_PRESETS = "settings_treadmill_incline_presets"
+        private const val KEY_SETTINGS_TREADMILL_SPEED_STEP = "settings_treadmill_speed_step"
+        private const val KEY_SETTINGS_TREADMILL_CONFIRM_LARGE_INCREASE = "settings_treadmill_confirm_large_increase"
+        private const val KEY_SETTINGS_TREADMILL_RAMP = "settings_treadmill_ramp"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_WORKOUT = "settings_treadmill_follow_workout"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_MODE = "settings_treadmill_follow_mode"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_TRANSITION_SECONDS = "settings_treadmill_follow_transition_seconds"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_SHORT_STEP_SECONDS = "settings_treadmill_follow_short_step_seconds"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_MAX_SPEED = "settings_treadmill_follow_max_speed"
+        private const val KEY_SETTINGS_TREADMILL_FOLLOW_TONE = "settings_treadmill_follow_tone"
+        private const val KEY_SETTINGS_WORKOUT_SCREEN_FIELDS = "settings_workout_screen_fields"
 
         private val ALLOWED_PACKET_TIMEOUT_SECONDS = 10..60
         private val ALLOWED_SEND_INTERVAL_MS = 500L..2_000L
@@ -241,6 +316,16 @@ internal fun String?.toDashboardChartTimespan(): DashboardChartTimespan =
     this?.let { value ->
         runCatching { DashboardChartTimespan.valueOf(value) }.getOrNull()
     } ?: DashboardChartTimespan.MINUTES_10
+
+internal fun String?.toTreadmillRampProfile(): TreadmillRampProfile =
+    this?.let { value ->
+        runCatching { TreadmillRampProfile.valueOf(value) }.getOrNull()
+    } ?: BridgeSettings().treadmillRamp
+
+internal fun String?.toWorkoutTransitionMode(): WorkoutTransitionMode =
+    this?.let { value ->
+        runCatching { WorkoutTransitionMode.valueOf(value) }.getOrNull()
+    } ?: BridgeSettings().treadmillFollowMode
 
 internal fun String?.toPowerSource(): PowerSource =
     this?.let { value ->

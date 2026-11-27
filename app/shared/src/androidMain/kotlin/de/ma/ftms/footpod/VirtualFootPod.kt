@@ -1,4 +1,4 @@
-package de.ma.ftms.bridge.ble
+package de.ma.ftms.footpod
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -20,11 +20,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
-import androidx.core.content.getSystemService
-import de.ma.ftms.bridge.runtime.CCCD_UUID
-import de.ma.ftms.bridge.runtime.FootPodStatus
-import de.ma.ftms.bridge.runtime.RSC_MEASUREMENT_UUID
-import de.ma.ftms.bridge.runtime.RSC_SERVICE_UUID
+import de.ma.ftms.core.FootPodStatus
+import de.ma.ftms.core.RememberedSubscriptions
 import de.ma.ftms.core.RscMeasurement
 import de.ma.ftms.core.ScControlPoint
 import java.util.ArrayDeque
@@ -34,11 +31,15 @@ import java.util.UUID
  * Makes the phone a Bluetooth running sensor (Running Speed and Cadence service), so a watch that
  * is paired with it takes speed and distance from the treadmill instead of estimating them.
  *
+ * [modelNumber] is what the sensor reports as its model, see [de.ma.ftms.core.FootPodModel]; by it
+ * the bridge's own sensor and a relay of it are told apart.
+ *
  * All public functions must be called on the main thread, and every [Callbacks] function is
  * invoked on the main thread; Android's callbacks arrive on binder threads and are posted over.
  */
-internal class VirtualFootPod(
+class VirtualFootPod(
     private val context: Context,
+    private val modelNumber: String,
     private val callbacks: Callbacks,
 ) {
     interface Callbacks {
@@ -47,7 +48,7 @@ internal class VirtualFootPod(
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val bluetoothManager = context.getSystemService<BluetoothManager>()
+    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
     private var server: BluetoothGattServer? = null
     private var advertiser: BluetoothLeAdvertiser? = null
     private var advertiseCallback: AdvertiseCallback? = null
@@ -58,6 +59,13 @@ internal class VirtualFootPod(
     /** Devices that asked for the measurements. Other connections of the phone do not count. */
     private val measurementSubscribers = LinkedHashSet<BluetoothDevice>()
     private val controlPointSubscribers = LinkedHashSet<BluetoothDevice>()
+
+    /**
+     * What each client had switched on, by its address. A watch that has bonded with the phone
+     * switches the measurements on once and expects them again after every reconnect without
+     * asking, as Bluetooth requires of a sensor for bonded clients.
+     */
+    private val remembered = context.getSharedPreferences("virtual_foot_pod", Context.MODE_PRIVATE)
     private var status = FootPodStatus.OFF
 
     val isActive: Boolean
@@ -100,6 +108,7 @@ internal class VirtualFootPod(
 
         server = opened
         advertiser = leAdvertiser
+        forgetClientsWithoutBond(adapter.bondedDevices.orEmpty().map { it.address }.toSet())
         pendingServices.clear()
         pendingServices.add(runningSpeedService())
         pendingServices.add(deviceInformationService())
@@ -137,9 +146,9 @@ internal class VirtualFootPod(
     }
 
     private fun runningSpeedService(): BluetoothGattService {
-        val service = BluetoothGattService(RSC_SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+        val service = BluetoothGattService(FootPodUuids.RSC_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         val measurementCharacteristic = BluetoothGattCharacteristic(
-            RSC_MEASUREMENT_UUID,
+            FootPodUuids.RSC_MEASUREMENT,
             BluetoothGattCharacteristic.PROPERTY_NOTIFY,
             0,
         ).apply { addDescriptor(configurationDescriptor()) }
@@ -168,9 +177,9 @@ internal class VirtualFootPod(
     }
 
     private fun deviceInformationService(): BluetoothGattService =
-        BluetoothGattService(DEVICE_INFORMATION_SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+        BluetoothGattService(FootPodUuids.DEVICE_INFORMATION_SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
             addCharacteristic(readOnly(MANUFACTURER_NAME_UUID))
-            addCharacteristic(readOnly(MODEL_NUMBER_UUID))
+            addCharacteristic(readOnly(FootPodUuids.MODEL_NUMBER))
         }
 
     private fun batteryService(): BluetoothGattService =
@@ -187,7 +196,7 @@ internal class VirtualFootPod(
 
     private fun configurationDescriptor(): BluetoothGattDescriptor =
         BluetoothGattDescriptor(
-            CCCD_UUID,
+            FootPodUuids.CCCD,
             BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE,
         )
 
@@ -217,7 +226,7 @@ internal class VirtualFootPod(
             .build()
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
-            .addServiceUuid(ParcelUuid(RSC_SERVICE_UUID))
+            .addServiceUuid(ParcelUuid(FootPodUuids.RSC_SERVICE))
             .build()
         val scanResponse = AdvertiseData.Builder().setIncludeDeviceName(includeName).build()
         val callback = object : AdvertiseCallback() {
@@ -289,7 +298,19 @@ internal class VirtualFootPod(
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             mainHandler.post {
-                if (server == null || newState != BluetoothProfile.STATE_DISCONNECTED) return@post
+                if (server == null) return@post
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    restoreSubscriptions(device, usesTheSensor = false)
+                    return@post
+                }
+                if (newState != BluetoothProfile.STATE_DISCONNECTED) return@post
+                if (isStillConnected(device)) {
+                    // Android also reports here that a second connection to the same device failed,
+                    // for example one over classic Bluetooth to a watch that has bonded with the
+                    // phone. The connection the measurements go through is not affected by that.
+                    callbacks.onFootPodDiagnostic("foot_pod disconnect_ignored status=$status reason=still_connected")
+                    return@post
+                }
                 val wasSubscribed = measurementSubscribers.remove(device)
                 controlPointSubscribers.remove(device)
                 if (wasSubscribed) {
@@ -307,6 +328,9 @@ internal class VirtualFootPod(
         ) {
             mainHandler.post {
                 val value = readableValue(characteristic.uuid)
+                if (value != null) {
+                    restoreSubscriptions(device, usesTheSensor = true)
+                }
                 if (value == null || offset > value.size) {
                     respond(device, requestId, BluetoothGatt.GATT_READ_NOT_PERMITTED, offset, null)
                 } else {
@@ -323,8 +347,8 @@ internal class VirtualFootPod(
         ) {
             mainHandler.post {
                 val value = when {
-                    descriptor.uuid != CCCD_UUID -> null
-                    descriptor.characteristic.uuid == RSC_MEASUREMENT_UUID ->
+                    descriptor.uuid != FootPodUuids.CCCD -> null
+                    descriptor.characteristic.uuid == FootPodUuids.RSC_MEASUREMENT ->
                         if (device in measurementSubscribers) NOTIFICATIONS_ON else NOTIFICATIONS_OFF
                     descriptor.characteristic.uuid == SC_CONTROL_POINT_UUID ->
                         if (device in controlPointSubscribers) INDICATIONS_ON else NOTIFICATIONS_OFF
@@ -349,17 +373,18 @@ internal class VirtualFootPod(
         ) {
             val written = value.copyOf()
             mainHandler.post {
-                if (descriptor.uuid != CCCD_UUID || written.isEmpty()) {
+                if (descriptor.uuid != FootPodUuids.CCCD || written.isEmpty()) {
                     if (responseNeeded) respond(device, requestId, BluetoothGatt.GATT_WRITE_NOT_PERMITTED, offset, null)
                     return@post
                 }
 
                 val enabled = written[0].toInt() != 0
                 when (descriptor.characteristic.uuid) {
-                    RSC_MEASUREMENT_UUID -> onMeasurementSubscription(device, enabled)
+                    FootPodUuids.RSC_MEASUREMENT -> onMeasurementSubscription(device, enabled)
                     SC_CONTROL_POINT_UUID ->
                         if (enabled) controlPointSubscribers.add(device) else controlPointSubscribers.remove(device)
                 }
+                remember(device)
                 if (responseNeeded) respond(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             }
         }
@@ -386,12 +411,71 @@ internal class VirtualFootPod(
         }
 
         callbacks.onFootPodDiagnostic("foot_pod watch_subscribed=$enabled subscribers=${measurementSubscribers.size}")
-        if (enabled) {
+        if (enabled && runCatching { device.type == BluetoothDevice.DEVICE_TYPE_LE }.getOrDefault(false)) {
             // Marks the link as used by this app, so Android keeps it for as long as the sensor is open.
+            // Not for a device that also speaks classic Bluetooth, such as a watch bonded with the
+            // phone: Android would try to reach it over classic Bluetooth, fail after eight seconds
+            // and report the watch as disconnected.
             runCatching { server?.connect(device, false) }
         }
         refreshStatus()
     }
+
+    /** Stores what [device] has switched on, for its next connection. */
+    private fun remember(device: BluetoothDevice) {
+        val state = RememberedSubscriptions(
+            measurement = device in measurementSubscribers,
+            controlPoint = device in controlPointSubscribers,
+        )
+        remembered.edit().putString(device.address, state.encode()).apply()
+    }
+
+    /**
+     * Gives a bonded client back what it had switched on; it does not switch it on again itself.
+     *
+     * If nothing is remembered of it, a bonded client that [usesTheSensor], that is, reads its
+     * values, is taken as subscribed: it has switched the measurements on before this app
+     * remembered that, for example before the app's data was cleared.
+     */
+    private fun restoreSubscriptions(device: BluetoothDevice, usesTheSensor: Boolean) {
+        if (device in measurementSubscribers || !isBonded(device)) {
+            return
+        }
+
+        val state = RememberedSubscriptions.decode(remembered.getString(device.address, null))
+        if (state == null && !usesTheSensor) {
+            return
+        }
+
+        if (state?.controlPoint != false) {
+            controlPointSubscribers.add(device)
+        }
+        if (state?.measurement != false) {
+            callbacks.onFootPodDiagnostic(if (state == null) "foot_pod subscription_assumed" else "foot_pod subscription_restored")
+            onMeasurementSubscription(device, true)
+        }
+        if (state == null) {
+            remember(device)
+        }
+    }
+
+    /** Drops what is remembered of clients that are not bonded: their addresses change and never return. */
+    private fun forgetClientsWithoutBond(bondedAddresses: Set<String>) {
+        val gone = remembered.all.keys - bondedAddresses
+        if (gone.isNotEmpty()) {
+            remembered.edit().apply { gone.forEach(::remove) }.apply()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun isBonded(device: BluetoothDevice): Boolean =
+        runCatching { device.bondState == BluetoothDevice.BOND_BONDED }.getOrDefault(false)
+
+    @SuppressLint("MissingPermission")
+    private fun isStillConnected(device: BluetoothDevice): Boolean =
+        runCatching {
+            bluetoothManager?.getConnectionState(device, BluetoothProfile.GATT_SERVER) == BluetoothProfile.STATE_CONNECTED
+        }.getOrDefault(false)
 
     private fun onControlPointWrite(
         device: BluetoothDevice,
@@ -425,7 +509,7 @@ internal class VirtualFootPod(
             SENSOR_LOCATION_UUID -> byteArrayOf(SENSOR_LOCATION_OTHER)
             BATTERY_LEVEL_UUID -> byteArrayOf(BATTERY_LEVEL_FULL)
             MANUFACTURER_NAME_UUID -> MANUFACTURER_NAME.toByteArray(Charsets.UTF_8)
-            MODEL_NUMBER_UUID -> MODEL_NUMBER.toByteArray(Charsets.UTF_8)
+            FootPodUuids.MODEL_NUMBER -> modelNumber.toByteArray(Charsets.UTF_8)
             else -> null
         }
 
@@ -458,9 +542,7 @@ internal class VirtualFootPod(
         val RSC_FEATURE_UUID: UUID = UUID.fromString("00002a54-0000-1000-8000-00805f9b34fb")
         val SC_CONTROL_POINT_UUID: UUID = UUID.fromString("00002a55-0000-1000-8000-00805f9b34fb")
         val SENSOR_LOCATION_UUID: UUID = UUID.fromString("00002a5d-0000-1000-8000-00805f9b34fb")
-        val DEVICE_INFORMATION_SERVICE_UUID: UUID = UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb")
         val MANUFACTURER_NAME_UUID: UUID = UUID.fromString("00002a29-0000-1000-8000-00805f9b34fb")
-        val MODEL_NUMBER_UUID: UUID = UUID.fromString("00002a24-0000-1000-8000-00805f9b34fb")
         val BATTERY_SERVICE_UUID: UUID = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
         val BATTERY_LEVEL_UUID: UUID = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
 
@@ -471,7 +553,6 @@ internal class VirtualFootPod(
         const val SENSOR_LOCATION_OTHER: Byte = 0
         const val BATTERY_LEVEL_FULL: Byte = 100
         const val MANUFACTURER_NAME = "FTMS Bridge"
-        const val MODEL_NUMBER = "Treadmill foot pod"
 
         /** Bluetooth's common error "Client Characteristic Configuration Descriptor Improperly Configured". */
         const val ATT_ERROR_CCCD_IMPROPERLY_CONFIGURED = 0xFD

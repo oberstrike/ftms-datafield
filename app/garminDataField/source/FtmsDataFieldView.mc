@@ -6,6 +6,7 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     var _phoneBridge;
     var _fitWriter;
     var _sensorPublisher;
+    var _workoutPublisher;
     var _lastWrittenPacketCount = 0;
     var _primaryMetric = FtmsVariant.METRIC_ASCENT;
 
@@ -17,6 +18,7 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
         FtmsState.reset();
         _fitWriter = new FtmsFitWriter(self);
         _sensorPublisher = new WatchSensorPublisher();
+        _workoutPublisher = new WorkoutStepPublisher();
         _phoneBridge = new FtmsPhoneBridgeReceiver();
         _phoneBridge.start();
         _bleClient = new FtmsBleClient();
@@ -39,6 +41,27 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
         if (_sensorPublisher != null) {
             _sensorPublisher.announceActivityEnded();
         }
+        if (_workoutPublisher != null) {
+            _workoutPublisher.onTimerReset();
+        }
+    }
+
+    function onWorkoutStarted() {
+        if (_workoutPublisher != null) {
+            _workoutPublisher.onWorkoutStarted();
+        }
+    }
+
+    function onWorkoutStepComplete() {
+        if (_workoutPublisher != null) {
+            _workoutPublisher.onWorkoutStepComplete();
+        }
+    }
+
+    function onTimerLap() {
+        if (_workoutPublisher != null) {
+            _workoutPublisher.onTimerLap();
+        }
     }
 
     function shutdown() {
@@ -50,6 +73,9 @@ class FtmsDataFieldView extends Ui.SimpleDataField {
     function compute(info) {
         if (_sensorPublisher != null) {
             _sensorPublisher.publish(info);
+        }
+        if (_workoutPublisher != null) {
+            _workoutPublisher.publish();
         }
 
         if (_bleClient != null) {

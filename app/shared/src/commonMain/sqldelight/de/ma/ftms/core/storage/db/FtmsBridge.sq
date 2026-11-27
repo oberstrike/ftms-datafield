@@ -78,6 +78,18 @@ FROM session_sample
 WHERE session_id = ?
 ORDER BY offset_millis ASC;
 
+-- What the list of sessions shows of each session beyond its own row. One row per session that has
+-- samples; the index on (session_id, offset_millis) keeps this to the samples of the sessions asked for.
+selectSessionAverages:
+SELECT session_id,
+       MAX(offset_millis) AS last_offset_millis,
+       AVG(power_w) AS average_power_w,
+       AVG(heart_rate_bpm) AS average_heart_rate_bpm,
+       AVG(COALESCE(cadence_rpm, step_rate_spm)) AS average_cadence
+FROM session_sample
+WHERE session_id IN ?
+GROUP BY session_id;
+
 selectOpenSessions:
 SELECT *
 FROM workout_session

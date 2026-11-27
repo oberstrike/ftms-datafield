@@ -21,4 +21,5 @@ plugins {
 rootProject.name = "FTMS-Datafield"
 
 include("app:androidApp")
+include("app:relayApp")
 include("app:shared")

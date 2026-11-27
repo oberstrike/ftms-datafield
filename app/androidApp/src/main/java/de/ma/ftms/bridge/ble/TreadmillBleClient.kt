@@ -29,7 +29,6 @@ import de.ma.ftms.bridge.runtime.FTMS_SERVICE_UUID
 import de.ma.ftms.bridge.runtime.INDOOR_BIKE_DATA_UUID
 import de.ma.ftms.bridge.runtime.RSC_MEASUREMENT_UUID
 import de.ma.ftms.bridge.runtime.RSC_SERVICE_UUID
-import de.ma.ftms.bridge.runtime.SUPPORTED_POWER_RANGE_UUID
 import de.ma.ftms.bridge.runtime.TREADMILL_DATA_UUID
 import de.ma.ftms.bridge.runtime.TREADMILL_PREFIX
 import de.ma.ftms.bridge.runtime.TreadmillDeviceItem
@@ -78,8 +77,8 @@ internal class TreadmillBleClient(
          */
         fun onControlPointSetUp(available: Boolean)
 
-        /** Value of the Supported Power Range characteristic, read after the set-up. */
-        fun onSupportedPowerRange(bytes: ByteArray)
+        /** Value of one of the characteristics named in [controlPointReads], read after the set-up. */
+        fun onControlPointValueRead(uuid: UUID, bytes: ByteArray)
 
         /** The equipment's answer to a command written with [writeControlPoint]. */
         fun onControlPointResponse(bytes: ByteArray)
@@ -103,7 +102,7 @@ internal class TreadmillBleClient(
     )
 
     private sealed interface ControlOperation {
-        data object ReadPowerRange : ControlOperation
+        class Read(val uuid: UUID) : ControlOperation
         class Write(val bytes: ByteArray) : ControlOperation
     }
 
@@ -112,6 +111,12 @@ internal class TreadmillBleClient(
      * that is only read is never written to beyond enabling its notifications.
      */
     var controlPointWanted = false
+
+    /**
+     * The characteristics of the FTMS service to read once the control point is set up, such as
+     * the range of values the equipment accepts. Those the equipment lacks are left out.
+     */
+    var controlPointReads: List<UUID> = emptyList()
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val bluetoothManager = context.getSystemService<BluetoothManager>()
@@ -660,7 +665,10 @@ internal class TreadmillBleClient(
         }
 
         if (controlPointReady) {
-            pendingControlOperations.add(ControlOperation.ReadPowerRange)
+            val ftmsService = gatt.getService(FTMS_SERVICE_UUID)
+            controlPointReads
+                .filter { ftmsService?.getCharacteristic(it) != null }
+                .forEach { pendingControlOperations.add(ControlOperation.Read(it)) }
         }
         callbacks.onControlPointSetUp(available = controlPointReady)
         // The owner may have queued a command from the callback; run whatever is waiting.
@@ -694,9 +702,9 @@ internal class TreadmillBleClient(
     private fun startControlOperation(gatt: BluetoothGatt, operation: ControlOperation): Boolean =
         runCatching {
             when (operation) {
-                ControlOperation.ReadPowerRange -> {
+                is ControlOperation.Read -> {
                     val characteristic = gatt.getService(FTMS_SERVICE_UUID)
-                        ?.getCharacteristic(SUPPORTED_POWER_RANGE_UUID)
+                        ?.getCharacteristic(operation.uuid)
                         ?: return@runCatching false
                     gatt.readCharacteristic(characteristic)
                 }
@@ -741,12 +749,12 @@ internal class TreadmillBleClient(
 
     private fun handleCharacteristicRead(gatt: BluetoothGatt, uuid: UUID, value: ByteArray, status: Int) {
         callbacks.onBleDiagnostic("characteristic_read uuid=$uuid status=$status bytes=${value.toHexPreview()}")
-        if (uuid != SUPPORTED_POWER_RANGE_UUID || activeControlOperation != ControlOperation.ReadPowerRange) {
+        if ((activeControlOperation as? ControlOperation.Read)?.uuid != uuid) {
             return
         }
 
         if (status == BluetoothGatt.GATT_SUCCESS) {
-            callbacks.onSupportedPowerRange(value)
+            callbacks.onControlPointValueRead(uuid, value)
         }
         finishControlOperation(gatt)
     }

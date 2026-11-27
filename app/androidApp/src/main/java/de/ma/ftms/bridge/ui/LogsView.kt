@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -163,14 +164,16 @@ private fun LogControls(
         StatusRow(strings.logs.diagnosticLogPath, diagnosticLogPath ?: strings.logs.noDiagnosticLogFile)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onToggleCapture, modifier = Modifier.weight(1f)) {
-                Text(if (capturing) strings.common.stop else strings.common.start)
+            // Three next to each other: with the usual inner margin a longer word breaks on a narrow phone.
+            val narrow = PaddingValues(horizontal = 8.dp)
+            OutlinedButton(onClick = onToggleCapture, contentPadding = narrow, modifier = Modifier.weight(1f)) {
+                Text(if (capturing) strings.common.stop else strings.common.start, maxLines = 1)
             }
-            OutlinedButton(enabled = canClear, onClick = onClear, modifier = Modifier.weight(1f)) {
-                Text(strings.common.clear)
+            OutlinedButton(enabled = canClear, onClick = onClear, contentPadding = narrow, modifier = Modifier.weight(1f)) {
+                Text(strings.common.clear, maxLines = 1)
             }
-            OutlinedButton(enabled = canShare, onClick = onShare, modifier = Modifier.weight(1f)) {
-                Text(strings.common.share)
+            OutlinedButton(enabled = canShare, onClick = onShare, contentPadding = narrow, modifier = Modifier.weight(1f)) {
+                Text(strings.common.share, maxLines = 1)
             }
         }
 

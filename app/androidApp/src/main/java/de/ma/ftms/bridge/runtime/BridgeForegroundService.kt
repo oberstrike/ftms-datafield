@@ -34,7 +34,7 @@ class BridgeForegroundService : Service() {
             ACTION_STOP -> {
                 if (BridgeRuntime.state.value.running) {
                     // The runtime stops the service itself, unless it goes on waiting for the watch.
-                    BridgeRuntime.stopBridge()
+                    BridgeRuntime.stopBridgeByHand()
                 } else {
                     // Without a session the action belongs to the waiting notification.
                     BridgeRuntime.dismissWatchWait()
@@ -42,8 +42,8 @@ class BridgeForegroundService : Service() {
                 }
                 return START_NOT_STICKY
             }
-            ACTION_PAUSE -> BridgeRuntime.pauseBridge()
-            ACTION_RESUME -> BridgeRuntime.resumeBridge()
+            ACTION_PAUSE -> BridgeRuntime.pauseBridgeByHand()
+            ACTION_RESUME -> BridgeRuntime.resumeBridgeByHand()
         }
 
         if (action != ACTION_START && action != ACTION_WAIT) {
@@ -165,6 +165,11 @@ class BridgeForegroundService : Service() {
             return builder
                 .addAction(R.drawable.ic_stat_bridge, strings.stopWaitingAction, stopIntent)
                 .build()
+        }
+
+        if (BridgeRuntime.state.value.watchLed) {
+            // Pause and stop are done on the watch; offering them here would only lead to a refusal.
+            return builder.setContentText(strings.watchLedText).build()
         }
 
         builder.addAction(

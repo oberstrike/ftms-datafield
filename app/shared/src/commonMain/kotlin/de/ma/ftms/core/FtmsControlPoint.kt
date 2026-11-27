@@ -2,10 +2,13 @@ package de.ma.ftms.core
 
 /**
  * Commands and responses of the FTMS Fitness Machine Control Point (0x2AD9), limited to what is
- * needed to set a target power.
+ * needed to set a target power, a target speed and a target inclination. Starting and stopping
+ * equipment is left out on purpose.
  */
 object FtmsControlPoint {
     const val OP_REQUEST_CONTROL = 0x00
+    const val OP_SET_TARGET_SPEED = 0x02
+    const val OP_SET_TARGET_INCLINATION = 0x03
     const val OP_SET_TARGET_POWER = 0x05
     const val OP_RESPONSE = 0x80
 
@@ -27,6 +30,17 @@ object FtmsControlPoint {
             ((value shr 8) and 0xFF).toByte(),
         )
     }
+
+    /** Target speed in hundredths of a km/h, sent as an unsigned 16-bit value. */
+    fun setTargetSpeed(hundredthsKmh: Int): ByteArray =
+        command(OP_SET_TARGET_SPEED, hundredthsKmh.coerceIn(0, 0xFFFF))
+
+    /** Target inclination in tenths of a percent, sent as a signed 16-bit value. */
+    fun setTargetInclination(tenthsPercent: Int): ByteArray =
+        command(OP_SET_TARGET_INCLINATION, tenthsPercent.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()))
+
+    private fun command(opCode: Int, value: Int): ByteArray =
+        byteArrayOf(opCode.toByte(), (value and 0xFF).toByte(), ((value shr 8) and 0xFF).toByte())
 
     /** Reads a response indication; null for anything that is not one. */
     fun parseResponse(bytes: ByteArray): FtmsControlResponse? {
@@ -109,6 +123,85 @@ data class FtmsPowerRange(
         private fun sint16(bytes: ByteArray, offset: Int): Int {
             val unsigned = (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
             return if (unsigned >= 0x8000) unsigned - 0x10000 else unsigned
+        }
+    }
+}
+
+/**
+ * What the equipment says it can be told, from the Target Setting Features of the Fitness Machine
+ * Feature characteristic (0x2ACC), limited to speed and inclination.
+ */
+data class FtmsTargetSettings(
+    val speed: Boolean,
+    val inclination: Boolean,
+) {
+    companion object {
+        private const val SPEED_BIT = 0x01
+        private const val INCLINATION_BIT = 0x02
+
+        /** Reads the characteristic value; null if it is too short to hold the target settings. */
+        fun parse(bytes: ByteArray): FtmsTargetSettings? {
+            if (bytes.size < 8) {
+                return null
+            }
+
+            // Four bytes of machine features come first; the target settings follow, low byte first.
+            val settings = bytes[4].toInt() and 0xFF
+            return FtmsTargetSettings(
+                speed = settings and SPEED_BIT != 0,
+                inclination = settings and INCLINATION_BIT != 0,
+            )
+        }
+    }
+}
+
+/**
+ * The values the equipment accepts for one target, in the unit of its command: hundredths of a
+ * km/h for the speed (Supported Speed Range, 0x2AD4), tenths of a percent for the inclination
+ * (Supported Inclination Range, 0x2AD5).
+ */
+data class FtmsValueRange(
+    val min: Int,
+    val max: Int,
+    val step: Int,
+) {
+    /** The accepted value closest to [value]. */
+    fun nearest(value: Int): Int {
+        val clamped = value.coerceIn(min, max)
+        if (step <= 1) {
+            return clamped
+        }
+
+        val steps = (clamped - min + step / 2) / step
+        val snapped = min + steps * step
+        return if (snapped > max) snapped - step else snapped
+    }
+
+    companion object {
+        /** Reads a Supported Speed Range; null if it is truncated or names an empty range. */
+        fun parseSpeed(bytes: ByteArray): FtmsValueRange? = parse(bytes, signed = false)
+
+        /** Reads a Supported Inclination Range; null if it is truncated or names an empty range. */
+        fun parseInclination(bytes: ByteArray): FtmsValueRange? = parse(bytes, signed = true)
+
+        private fun parse(bytes: ByteArray, signed: Boolean): FtmsValueRange? {
+            if (bytes.size < 6) {
+                return null
+            }
+
+            val min = int16(bytes, 0, signed)
+            val max = int16(bytes, 2, signed)
+            val step = int16(bytes, 4, signed = false)
+            if (max < min) {
+                return null
+            }
+
+            return FtmsValueRange(min = min, max = max, step = step.coerceAtLeast(1))
+        }
+
+        private fun int16(bytes: ByteArray, offset: Int, signed: Boolean): Int {
+            val unsigned = (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
+            return if (signed && unsigned >= 0x8000) unsigned - 0x10000 else unsigned
         }
     }
 }

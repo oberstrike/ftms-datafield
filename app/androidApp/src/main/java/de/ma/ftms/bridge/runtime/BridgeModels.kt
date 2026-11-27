@@ -2,7 +2,9 @@ package de.ma.ftms.bridge.runtime
 
 import de.ma.ftms.bridge.debug.LogEntry
 import de.ma.ftms.bridge.i18n.AppLanguage
+import de.ma.ftms.core.FootPodStatus
 import de.ma.ftms.core.SmoothedTreadmillSample
+import de.ma.ftms.core.storage.SessionAverages
 import de.ma.ftms.core.storage.SessionSampleRecord
 import de.ma.ftms.core.storage.WorkoutSessionRecord
 import java.util.UUID
@@ -35,6 +37,9 @@ internal val VENDOR_SERVICE_UUID: UUID = UUID.fromString("0000fff0-0000-1000-800
 internal val VENDOR_NOTIFY_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
 internal val FITNESS_MACHINE_CONTROL_POINT_UUID: UUID = UUID.fromString("00002ad9-0000-1000-8000-00805f9b34fb")
 internal val SUPPORTED_POWER_RANGE_UUID: UUID = UUID.fromString("00002ad8-0000-1000-8000-00805f9b34fb")
+internal val FITNESS_MACHINE_FEATURE_UUID: UUID = UUID.fromString("00002acc-0000-1000-8000-00805f9b34fb")
+internal val SUPPORTED_SPEED_RANGE_UUID: UUID = UUID.fromString("00002ad4-0000-1000-8000-00805f9b34fb")
+internal val SUPPORTED_INCLINATION_RANGE_UUID: UUID = UUID.fromString("00002ad5-0000-1000-8000-00805f9b34fb")
 internal val FITNESS_MACHINE_STATUS_UUID: UUID = UUID.fromString("00002ada-0000-1000-8000-00805f9b34fb")
 internal val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -180,16 +185,76 @@ data class BridgeSettings(
     /** Dashboard contents per equipment type; types without an entry use their default. */
     val dashboardLayouts: Map<EquipmentType, DashboardLayout> = emptyMap(),
     val dashboardChartTimespan: DashboardChartTimespan = DashboardChartTimespan.MINUTES_10,
+    /** The charts of a recorded session per equipment type, in their order; default if absent. */
+    val historyCharts: Map<EquipmentType, List<DashboardMetricKey>> = emptyMap(),
     /** Quick choices for the target power of an indoor bike, in watts. */
     val targetPowerPresets: List<Int> = DEFAULT_TARGET_POWER_PRESETS,
     /** How far one tap on plus or minus moves the target power. */
     val targetPowerStepWatts: Int = DEFAULT_TARGET_POWER_STEP_WATTS,
+    /**
+     * Offer speed and incline of a treadmill on the dashboard and hold a connection to it for that
+     * while the app is open. Off by default: without it a treadmill is only read.
+     */
+    val treadmillControl: Boolean = false,
+    /** Quick choices for the speed of a treadmill, in hundredths of a km/h. */
+    val treadmillSpeedPresets: List<Int> = DEFAULT_TREADMILL_SPEED_PRESETS,
+    /** Quick choices for the incline of a treadmill, in tenths of a percent. */
+    val treadmillInclinePresets: List<Int> = DEFAULT_TREADMILL_INCLINE_PRESETS,
+    /** The larger of the two steps for the speed, in hundredths of a km/h. */
+    val treadmillSpeedStep: Int = DEFAULT_TREADMILL_SPEED_STEP,
+    /** Ask before a quick choice makes the belt much faster. */
+    val treadmillConfirmLargeIncrease: Boolean = true,
+    /** How the app takes the treadmill to a speed that is some way off. */
+    val treadmillRamp: TreadmillRampProfile = TreadmillRampProfile.GENTLE,
+    /**
+     * Set the speed of the treadmill to what the workout on the watch asks for, step by step. Off
+     * by default: with it the app sends speeds nobody tapped.
+     */
+    val treadmillFollowWorkout: Boolean = false,
+    /** How the belt gets from the speed of one step to that of the next. */
+    val treadmillFollowMode: WorkoutTransitionMode = WorkoutTransitionMode.SMART,
+    /** How long a soft change between steps takes, in seconds; 0 for the pace of [treadmillRamp]. */
+    val treadmillFollowTransitionSeconds: Int = 0,
+    /** A step shorter than this many seconds counts as short for [WorkoutTransitionMode.SMART]; 0 for none. */
+    val treadmillFollowShortStepSeconds: Int = DEFAULT_TREADMILL_FOLLOW_SHORT_STEP_SECONDS,
+    /** The most a workout may ask of the belt, in hundredths of a km/h. */
+    val treadmillFollowMaxSpeed: Int = DEFAULT_TREADMILL_FOLLOW_MAX_SPEED,
+    /** A short tone on the phone before a workout makes the belt faster. */
+    val treadmillFollowTone: Boolean = true,
+    /** The four values the workout screen shows, in the order of its fields. */
+    val workoutScreenFields: List<DashboardMetricKey> = DEFAULT_WORKOUT_SCREEN_FIELDS,
 ) {
+    fun treadmillPresets(setting: TreadmillSetting): List<Int> =
+        when (setting) {
+            TreadmillSetting.SPEED -> treadmillSpeedPresets
+            TreadmillSetting.INCLINE -> treadmillInclinePresets
+        }
+
+    fun withTreadmillPresets(setting: TreadmillSetting, presets: List<Int>): BridgeSettings {
+        val valid = sanitizeTreadmillPresets(setting, presets)
+        return when (setting) {
+            TreadmillSetting.SPEED -> copy(treadmillSpeedPresets = valid)
+            TreadmillSetting.INCLINE -> copy(treadmillInclinePresets = valid)
+        }
+    }
+
     fun dashboardLayout(type: EquipmentType): DashboardLayout =
         dashboardLayouts[type]?.forType(type) ?: defaultDashboardLayout(type)
 
     fun withDashboardLayout(type: EquipmentType, layout: DashboardLayout): BridgeSettings =
         copy(dashboardLayouts = dashboardLayouts + (type to layout))
+
+    /**
+     * The charts a recorded session of [type] shows. A stored choice can hold charts from an earlier
+     * version that [type] no longer offers; those are left out, and a choice left empty is the default.
+     */
+    fun historyCharts(type: EquipmentType): List<DashboardMetricKey> {
+        val offered = historyChartOptions(type)
+        return historyCharts[type]?.filter { it in offered }?.distinct()?.ifEmpty { null } ?: defaultHistoryCharts(type)
+    }
+
+    fun withHistoryCharts(type: EquipmentType, charts: List<DashboardMetricKey>): BridgeSettings =
+        copy(historyCharts = historyCharts + (type to charts))
 
     fun sensorSources(type: EquipmentType): SensorSources =
         sensorSources[type] ?: SensorSources()
@@ -207,6 +272,10 @@ data class BridgeUiState(
     val scanning: Boolean = false,
     val running: Boolean = false,
     val paused: Boolean = false,
+    /** The watch leads the session: pause and end are decided there, not in the app. */
+    val watchLed: Boolean = false,
+    /** The running session began with the activity on the watch and not with a tap in the app. */
+    val startedByWatch: Boolean = false,
     val activeDurationMillis: Long = 0,
     val treadmillConnected: Boolean = false,
     val garminReady: Boolean = false,
@@ -224,6 +293,10 @@ data class BridgeUiState(
     val autoStartStatus: AutoStartStatus = AutoStartStatus.OFF,
     val footPodStatus: FootPodStatus = FootPodStatus.OFF,
     val powerControl: PowerControlState = PowerControlState(),
+    /** What the app knows about steering the connected treadmill. */
+    val treadmillControl: TreadmillControlState = TreadmillControlState(),
+    /** What the app knows about the workout on the watch that the treadmill follows. */
+    val workoutFollow: WorkoutFollowState = WorkoutFollowState(),
     /** The changes of the target power during the running session, oldest first. */
     val targetPowerTrace: List<TargetPowerPoint> = emptyList(),
     /** The target last set in the app, offered when one is typed on the same bike. Never sent by itself. */
@@ -239,8 +312,14 @@ data class BridgeUiState(
     val lastError: String = "",
     val lastSummary: LastSessionSummary? = null,
     val sessions: List<WorkoutSessionRecord> = emptyList(),
+    /** Averages over the samples of the finished sessions, by session id, as far as they are read. */
+    val sessionAverages: Map<String, SessionAverages> = emptyMap(),
     val selectedHistorySessionId: String? = null,
+    /** The sessions marked in the list of the history, for an action on all of them. */
+    val markedHistorySessionIds: Set<String> = emptySet(),
     val selectedHistorySamples: List<SessionSampleRecord> = emptyList(),
+    /** False from selecting a session until its samples have been read. */
+    val selectedHistorySamplesLoaded: Boolean = false,
     val logs: List<LogEntry> = emptyList(),
     val diagnosticLogs: List<LogEntry> = emptyList(),
     val logCaptureEnabled: Boolean = false,

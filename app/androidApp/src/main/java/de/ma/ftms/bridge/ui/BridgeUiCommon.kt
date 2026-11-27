@@ -28,12 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.ma.ftms.bridge.i18n.LocalStrings
-import de.ma.ftms.bridge.runtime.FootPodStatus
+import de.ma.ftms.core.FootPodStatus
 import de.ma.ftms.bridge.runtime.isFootPodMode
 import de.ma.ftms.bridge.runtime.isWatchReadyForStart
 import de.ma.ftms.bridge.i18n.Strings
@@ -89,6 +90,12 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 fun StatusRow(label: String, value: String) {
+    StatusRow(label, AnnotatedString(value))
+}
+
+/** The same for a value of which a part is set apart, such as a second number in another colour. */
+@Composable
+fun StatusRow(label: String, value: AnnotatedString) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -239,8 +246,21 @@ fun ActionRow(
     subtitle: String,
     actionLabel: String,
     enabled: Boolean = true,
+    /** Puts the button below the text instead of next to it, where both together are too wide. */
+    stacked: Boolean = false,
     onClick: () -> Unit,
 ) {
+    if (stacked) {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(enabled = enabled, onClick = onClick, modifier = Modifier.align(Alignment.End)) {
+                Text(actionLabel)
+            }
+        }
+        return
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

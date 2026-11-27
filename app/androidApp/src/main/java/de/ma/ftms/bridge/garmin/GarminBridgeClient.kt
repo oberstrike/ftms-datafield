@@ -13,6 +13,8 @@ import de.ma.ftms.bridge.runtime.GarminDeviceItem
 import de.ma.ftms.bridge.runtime.WATCH_APP_ID
 import de.ma.ftms.bridge.runtime.WATCH_APP_IDS
 import de.ma.ftms.bridge.runtime.WatchTimerState
+import de.ma.ftms.bridge.runtime.WatchWorkout
+import de.ma.ftms.bridge.runtime.watchWorkoutFrom
 import de.ma.ftms.core.SensorReadings
 
 internal class GarminBridgeClient(
@@ -31,6 +33,13 @@ internal class GarminBridgeClient(
 
         /** State of the activity timer on the watch, sent by the data field. */
         fun onWatchTimer(deviceId: Long, state: WatchTimerState)
+
+        /** What the watch says about its workout, sent by the data field when it changes. */
+        /**
+         * The watch reported its workout: [workout] is the message as one line for the log,
+         * [steps] what could be read from it.
+         */
+        fun onWatchWorkout(deviceId: Long, workout: String, steps: WatchWorkout?)
         fun onSendStatus(status: String)
         fun log(message: String)
     }
@@ -318,9 +327,13 @@ internal class GarminBridgeClient(
                         if (timer != null) {
                             callbacks.onWatchTimer(device.deviceIdentifier, timer)
                         }
+                        val workout = describeWatchWorkoutMessage(message)
+                        if (workout != null) {
+                            callbacks.onWatchWorkout(device.deviceIdentifier, workout, parseWatchWorkoutMessage(message))
+                        }
                         BridgeLogger.debug(
                             TAG,
-                            "Watch message deviceId=${device.deviceIdentifier} readings=$readings timer=$timer",
+                            "Watch message deviceId=${device.deviceIdentifier} readings=$readings timer=$timer workout=$workout",
                         )
                     }
                 },
@@ -374,6 +387,36 @@ internal fun parseWatchTimerState(message: List<Any?>): WatchTimerState? {
     return WatchTimerState.fromWire(payload["timer"].toIntIn(0..3))
 }
 
+/**
+ * The data field's workout message as one line: which step the watch is in ("cur"), which one
+ * follows ("next"), and how many workouts started and steps and laps ended. Returns null for
+ * other messages.
+ *
+ * A trial: the line goes into the session log as it is, to learn what a real watch reports. The
+ * keys are sorted so that two messages can be compared by eye.
+ */
+internal fun describeWatchWorkoutMessage(message: List<Any?>): String? {
+    val payload = message.asSequence().mapNotNull { it as? Map<*, *> }.firstOrNull()
+        ?.takeIf { it["type"] == WATCH_WORKOUT_MESSAGE_TYPE }
+        ?: return null
+    return describeWatchValue(payload - "type").removeSurrounding("{", "}")
+}
+
+/** The steps of the data field's workout message; null for other messages. */
+internal fun parseWatchWorkoutMessage(message: List<Any?>): WatchWorkout? =
+    message.asSequence().mapNotNull { it as? Map<*, *> }.firstOrNull()
+        ?.takeIf { it["type"] == WATCH_WORKOUT_MESSAGE_TYPE }
+        ?.let(::watchWorkoutFrom)
+
+private fun describeWatchValue(value: Any?): String =
+    when (value) {
+        is Map<*, *> -> value.entries
+            .sortedBy { it.key.toString() }
+            .joinToString(prefix = "{", postfix = "}", separator = " ") { "${it.key}=${describeWatchValue(it.value)}" }
+        is String -> "\"$value\""
+        else -> value.toString()
+    }
+
 /** The content of a message of the data field's own type, or null for anything else. */
 private fun watchMessagePayload(message: List<Any?>): Map<*, *>? =
     message.asSequence()
@@ -404,4 +447,5 @@ internal fun compatibleAppIdsForSend(installedAppIds: Set<String>?): List<String
 
 // Named after its first content; kept so data fields and apps of different versions understand each other.
 private const val WATCH_SENSOR_MESSAGE_TYPE = "garmin_hr"
+private const val WATCH_WORKOUT_MESSAGE_TYPE = "garmin_workout"
 private const val TAG = "GarminCiq"

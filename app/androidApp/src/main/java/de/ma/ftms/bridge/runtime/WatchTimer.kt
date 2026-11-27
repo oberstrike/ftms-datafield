@@ -88,5 +88,20 @@ internal fun isWatchActivityOngoing(
 ): Boolean =
     report != null && report.state.activityOngoing && nowMillis - report.receivedAtMillis <= maxAgeMillis
 
+/**
+ * True while the watch leads the session: the activity on the watch started it and is still going,
+ * so pause and end are decided there and not in the app. If the watch has not been heard from for
+ * [maxAgeMillis], it no longer leads; otherwise a session could not be ended once the watch is out
+ * of reach.
+ */
+internal fun isSessionLedByWatch(
+    startedByWatch: Boolean,
+    followWatchTimer: Boolean,
+    report: WatchTimerReport?,
+    nowMillis: Long,
+    maxAgeMillis: Long = WATCH_TIMER_MAX_AGE_MS,
+): Boolean =
+    startedByWatch && followWatchTimer && isWatchActivityOngoing(report, nowMillis, maxAgeMillis)
+
 /** The data field repeats the timer state every few seconds while an activity is going. */
 internal const val WATCH_TIMER_MAX_AGE_MS = 20_000L

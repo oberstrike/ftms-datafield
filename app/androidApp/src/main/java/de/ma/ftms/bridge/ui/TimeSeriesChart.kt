@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -46,8 +50,14 @@ internal enum class ChartLineRole {
     /** The measured values the chart is about. */
     MAIN,
 
-    /** A second measurement of the same quantity, from another source. */
-    COMPARISON,
+    /**
+     * The measured values of a quantity that the equipment and the watch both deliver, from the
+     * source that is chosen for it. Drawn in the text colour: black on a light screen.
+     */
+    CHOSEN_SOURCE,
+
+    /** The same quantity from the source that is not chosen, drawn in red and a little thinner. */
+    OTHER_SOURCE,
 
     /** A value that was asked for rather than measured, drawn as a thin stepped line. */
     TARGET,
@@ -59,6 +69,36 @@ internal class ChartLine(
     val role: ChartLineRole = ChartLineRole.MAIN,
 )
 
+/** True for the lines a chart is about, as opposed to those drawn next to them for reference. */
+private val ChartLineRole.isMeasuredMain: Boolean
+    get() = this == ChartLineRole.MAIN || this == ChartLineRole.CHOSEN_SOURCE
+
+/** True for the lines drawn thinner than the main one. */
+private val ChartLineRole.isThin: Boolean
+    get() = this == ChartLineRole.TARGET || this == ChartLineRole.OTHER_SOURCE
+
+/**
+ * The time a finger rests on in a chart, in the seconds of its time axis; null while nothing
+ * touches it. Charts that are given the same cursor show their values at that time together.
+ */
+@Stable
+internal class ChartCursor {
+    var seconds: Double? by mutableStateOf(null)
+}
+
+/** What of the lines of a chart is worked out once rather than with every move of the finger. */
+private class ChartExtent(
+    val minX: Double,
+    val maxX: Double,
+    val dataMin: Double,
+    val dataMax: Double,
+    val mainMin: Double,
+    val mainMax: Double,
+    val mainAverage: Double,
+    /** The average of the source that is not chosen; null where the chart has one source only. */
+    val otherAverage: Double?,
+)
+
 /**
  * A line chart over time with a value axis on round numbers, a readout of the latest value and,
  * while a finger rests on it, of the values at that time.
@@ -68,6 +108,18 @@ internal class ChartLine(
  *
  * @param showStats whether average and maximum of the main line mean something (not for totals
  * such as distance, and not for a pace, whose mean over time is not the average pace).
+ * @param cursor where the finger is. Charts of the same stretch of time share one, so that a
+ * finger on one of them reads all of them at that time.
+ * @param timeRange the stretch of time the chart spans, in seconds; that of its lines if null.
+ * Charts sharing a cursor take the same range, so the same time is at the same place in each.
+ * @param widestAxisLabel a label of the value axis to leave room for even if this chart has none
+ * as wide. Given the same one, charts below each other begin their plots at the same place.
+ * @param recorded whether the chart shows a finished recording rather than a session that is
+ * running. The last value of a recording says little, so at rest the chart then reads the average
+ * of its main line, and marks no point. A line that ends in its result, such as a total, is read
+ * by its last value all the same; that is one whose average means nothing ([showStats] false).
+ * @param average the average of the main line of a recording where that is not the mean of its
+ * points, as with a pace.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -81,17 +133,33 @@ internal fun TimeSeriesChart(
     reverseY: Boolean = false,
     showStats: Boolean = true,
     chartHeight: Dp = 180.dp,
+    cursor: ChartCursor = remember { ChartCursor() },
+    timeRange: ClosedFloatingPointRange<Double>? = null,
+    widestAxisLabel: String? = null,
+    recorded: Boolean = false,
+    average: Double? = null,
 ) {
     val visible = remember(lines) { lines.filter { it.points.size >= 2 } }
     val main = visible.firstOrNull() ?: return
     val formatValue = format.format
-    val allPoints = visible.flatMap { it.points }
-    val minX = allPoints.minOf { it.x }
-    val maxX = allPoints.maxOf { it.x }
-    val dataMin = allPoints.minOf { it.y }
-    val dataMax = allPoints.maxOf { it.y }
-    val scale = remember(dataMin, dataMax, format.resolution) {
-        niceChartScale(dataMin, dataMax, resolution = format.resolution)
+    val extent = remember(visible, timeRange) {
+        val allPoints = visible.flatMap { it.points }
+        ChartExtent(
+            minX = timeRange?.start ?: allPoints.minOf { it.x },
+            maxX = timeRange?.endInclusive ?: allPoints.maxOf { it.x },
+            dataMin = allPoints.minOf { it.y },
+            dataMax = allPoints.maxOf { it.y },
+            mainMin = main.points.minOf { it.y },
+            mainMax = main.points.maxOf { it.y },
+            mainAverage = main.points.sumOf { it.y } / main.points.size,
+            otherAverage = visible.firstOrNull { it.role == ChartLineRole.OTHER_SOURCE }
+                ?.points?.let { points -> points.sumOf { it.y } / points.size },
+        )
+    }
+    val minX = extent.minX
+    val maxX = extent.maxX
+    val scale = remember(extent, format.resolution) {
+        niceChartScale(extent.dataMin, extent.dataMax, resolution = format.resolution)
     }
     val drawn = remember(visible) {
         visible.map { line ->
@@ -99,9 +167,9 @@ internal fun TimeSeriesChart(
         }
     }
 
-    /** Where the finger is, as a fraction of the plot's width; null while nothing touches it. */
-    var touch by remember { mutableStateOf<Float?>(null) }
-    val touchSeconds = touch?.let { minX + it * (maxX - minX) }
+    val touchSeconds = cursor.seconds?.coerceIn(minX, maxX)
+    val cursorState = rememberUpdatedState(cursor)
+    val timeSpan = rememberUpdatedState(minX to maxX)
 
     val textColor = MaterialTheme.colorScheme.onSurface
     val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -111,29 +179,43 @@ internal fun TimeSeriesChart(
     val tickStyle = MaterialTheme.typography.labelSmall.copy(color = mutedColor)
     val textMeasurer = rememberTextMeasurer()
     val tickLabels = scale.ticks.map(formatValue)
-    val gutterPx = remember(tickLabels, tickStyle) {
-        tickLabels.maxOf { textMeasurer.measure(it, tickStyle).size.width }.toFloat()
+    val gutterPx = remember(tickLabels, tickStyle, widestAxisLabel) {
+        (tickLabels + listOfNotNull(widestAxisLabel)).maxOf { textMeasurer.measure(it, tickStyle).size.width }.toFloat()
     }
     val gutterState = rememberUpdatedState(gutterPx)
 
     fun valueAt(line: ChartLine, seconds: Double): Double? =
         if (line.role == ChartLineRole.TARGET) steppedValueAt(line.points, seconds) else nearestPoint(line.points, seconds)?.y
 
-    val shownMainValue = touchSeconds?.let { valueAt(main, it) } ?: main.points.last().y
     val withUnit: (Double) -> String = { value -> if (unit.isBlank()) formatValue(value) else "${formatValue(value)} $unit" }
-    val description = strings.dashboard.chartSummary(
-        title = title,
-        latest = formatValue(main.points.last().y),
-        min = formatValue(main.points.minOf { it.y }),
-        max = formatValue(main.points.maxOf { it.y }),
-        start = formatElapsedTime(minX),
-        end = formatElapsedTime(maxX),
-    )
+    val restingAverage = if (recorded) average ?: extent.mainAverage.takeIf { showStats } else null
+    // Where both sources are drawn, the average of the other one stands in brackets behind that of
+    // the chosen one, in the colour of its line.
+    val otherAverageText = extent.otherAverage?.takeIf { average == null }?.let(formatValue)
+    val otherColor = chartLineColor(ChartLineRole.OTHER_SOURCE)
+    val averages = averageWithOther(formatValue(restingAverage ?: extent.mainAverage), otherAverageText)
+    val readout = when {
+        touchSeconds != null -> AnnotatedString(withUnit(valueAt(main, touchSeconds) ?: main.points.last().y))
+        restingAverage != null -> strings.dashboard
+            .chartAverage(if (unit.isBlank()) averages else "$averages $unit")
+            .withBracketsIn(otherColor, otherAverageText)
+        else -> AnnotatedString(withUnit(main.points.last().y))
+    }
+    val description = remember(title, main, extent, strings) {
+        strings.dashboard.chartSummary(
+            title = title,
+            latest = formatValue(main.points.last().y),
+            min = formatValue(extent.mainMin),
+            max = formatValue(extent.mainMax),
+            start = formatElapsedTime(minX),
+            end = formatElapsedTime(maxX),
+        )
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
             Text(
-                withUnit(shownMainValue),
+                readout,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = textColor,
@@ -141,12 +223,10 @@ internal fun TimeSeriesChart(
             )
             val side = when {
                 touchSeconds != null -> formatElapsedTime(touchSeconds)
-                showStats -> strings.dashboard.chartStats(
-                    average = formatValue(main.points.sumOf { it.y } / main.points.size),
-                    max = formatValue(main.points.maxOf { it.y }),
-                )
+                restingAverage != null -> strings.dashboard.chartMax(formatValue(extent.mainMax)).takeIf { showStats }
+                showStats -> strings.dashboard.chartStats(average = averages, max = formatValue(extent.mainMax))
                 else -> null
-            }
+            }?.withBracketsIn(otherColor, otherAverageText)
             if (side != null) {
                 Text(side, style = MaterialTheme.typography.bodySmall, color = mutedColor)
             }
@@ -163,7 +243,7 @@ internal fun TimeSeriesChart(
                         else -> null
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        LineKey(color = colors[index], thin = line.role == ChartLineRole.TARGET)
+                        LineKey(color = colors[index], thin = line.role.isThin)
                         Text(
                             if (value == null) line.label else "${line.label} ${withUnit(value)}",
                             style = MaterialTheme.typography.bodySmall,
@@ -183,21 +263,28 @@ internal fun TimeSeriesChart(
                     awaitEachGesture {
                         // Not consumed: the list keeps scrolling while the readout follows the finger.
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val fractionOf = { x: Float ->
+                        val secondsAt = { x: Float ->
                             val left = gutterState.value + GUTTER_GAP.toPx()
                             val width = (size.width - left - RIGHT_PADDING.toPx()).coerceAtLeast(1f)
-                            ((x - left) / width).coerceIn(0f, 1f)
+                            val (from, to) = timeSpan.value
+                            from + ((x - left) / width).coerceIn(0f, 1f) * (to - from)
                         }
-                        touch = fractionOf(down.position.x)
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id }
-                            if (change == null || !change.pressed) {
-                                break
+                        val touched = cursorState.value
+                        try {
+                            touched.seconds = secondsAt(down.position.x)
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change == null || !change.pressed) {
+                                    break
+                                }
+                                touched.seconds = secondsAt(change.position.x)
                             }
-                            touch = fractionOf(change.position.x)
+                        } finally {
+                            // Also when the chart leaves the screen under the finger: a cursor shared
+                            // with other charts must not stay where it was.
+                            touched.seconds = null
                         }
-                        touch = null
                     }
                 },
         ) {
@@ -250,7 +337,7 @@ internal fun TimeSeriesChart(
                     }
                 }
 
-                if (line.role == ChartLineRole.MAIN && !reverseY) {
+                if (line.role.isMeasuredMain && !reverseY) {
                     // A light wash below the main line; it carries no value of its own.
                     val area = Path().apply {
                         addPath(path)
@@ -264,7 +351,7 @@ internal fun TimeSeriesChart(
                     path,
                     color,
                     style = Stroke(
-                        width = (if (line.role == ChartLineRole.TARGET) 1.5.dp else 2.dp).toPx(),
+                        width = (if (line.role.isThin) 1.5.dp else 2.dp).toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
                     ),
@@ -277,8 +364,10 @@ internal fun TimeSeriesChart(
                 drawCircle(color, radius = 4.dp.toPx(), center = center)
             }
             if (touchSeconds == null) {
-                val last = main.points.last()
-                marker(Offset(xOf(last.x), yOf(last.y)), colors.first())
+                if (!recorded) {
+                    val last = main.points.last()
+                    marker(Offset(xOf(last.x), yOf(last.y)), colors.first())
+                }
             } else {
                 val x = xOf(touchSeconds)
                 drawLine(mutedColor, Offset(x, top), Offset(x, bottom), strokeWidth = 1.dp.toPx())
@@ -291,6 +380,27 @@ internal fun TimeSeriesChart(
                 }
             }
         }
+    }
+}
+
+/**
+ * The average of the chosen source with that of the other source in brackets behind it, as in
+ * `148 (150)`; the average alone where there is no other source.
+ */
+internal fun averageWithOther(average: String, other: String?): String =
+    if (other == null) average else "$average ($other)"
+
+/** This text with the bracketed [other] average in [color]; unchanged where there is none. */
+internal fun String.withBracketsIn(color: Color, other: String?): AnnotatedString {
+    val bracketed = other?.let { "($it)" }
+    val start = bracketed?.let { indexOf(it) } ?: -1
+    if (bracketed == null || start < 0) {
+        return AnnotatedString(this)
+    }
+
+    return buildAnnotatedString {
+        append(this@withBracketsIn)
+        addStyle(SpanStyle(color = color), start, start + bracketed.length)
     }
 }
 
@@ -312,15 +422,18 @@ private fun LineKey(color: Color, thin: Boolean) {
 }
 
 /**
- * Colours of the lines. Main and comparison are a pair checked for colour-vision deficiencies in
- * both themes; the target is drawn in the text colour, as a line of reference rather than data.
+ * Colours of the lines. Of the two sources of a value the chosen one is drawn in the text colour,
+ * black on a light screen and white on a dark one, and the other one in red. Red and black are hard
+ * to tell apart for some eyes, so the other source is also thinner and the legend names both. The
+ * target is drawn in the muted text colour, as a line of reference rather than data.
  */
 @Composable
-private fun chartLineColor(role: ChartLineRole): Color {
+internal fun chartLineColor(role: ChartLineRole): Color {
     val dark = isSystemInDarkTheme()
     return when (role) {
         ChartLineRole.MAIN -> if (dark) Color(0xFF338CED) else Color(0xFF257DE0)
-        ChartLineRole.COMPARISON -> if (dark) Color(0xFFE76624) else Color(0xFFF47230)
+        ChartLineRole.CHOSEN_SOURCE -> MaterialTheme.colorScheme.onSurface
+        ChartLineRole.OTHER_SOURCE -> if (dark) Color(0xFFFF5A52) else Color(0xFFD32F2F)
         ChartLineRole.TARGET -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 }

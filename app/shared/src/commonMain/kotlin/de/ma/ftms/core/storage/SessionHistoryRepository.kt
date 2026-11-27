@@ -38,6 +38,15 @@ interface SessionHistoryRepository {
         stats: SessionStatsSnapshot,
     ): WorkoutSessionRecord?
     suspend fun latestSession(): WorkoutSessionRecord?
+
+    /**
+     * The averages over the samples of each of [sessionIds]. Every id asked for is in the result; a
+     * session without samples has averages without values.
+     */
+    suspend fun sessionAverages(sessionIds: Collection<String>): Map<String, SessionAverages>
     suspend fun deleteSession(sessionId: String)
+
+    /** Deletes all of [sessionIds] with their samples, or none of them. */
+    suspend fun deleteSessions(sessionIds: Collection<String>)
     suspend fun clearAll()
 }

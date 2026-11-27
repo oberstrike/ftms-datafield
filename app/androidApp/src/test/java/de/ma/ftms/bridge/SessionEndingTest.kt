@@ -9,6 +9,7 @@ import de.ma.ftms.bridge.runtime.SessionStats
 import de.ma.ftms.bridge.runtime.WatchTimerAction
 import de.ma.ftms.bridge.runtime.WatchTimerReport
 import de.ma.ftms.bridge.runtime.WatchTimerState
+import de.ma.ftms.bridge.runtime.isSessionLedByWatch
 import de.ma.ftms.bridge.runtime.isWatchActivityOngoing
 import de.ma.ftms.bridge.runtime.watchTimerAction
 import de.ma.ftms.core.DistanceSource
@@ -255,6 +256,39 @@ class WatchTimerTest {
         assertTrue(isWatchActivityOngoing(WatchTimerReport(WatchTimerState.STOPPED, 1_000L), nowMillis = 2_000L))
         assertFalse(isWatchActivityOngoing(WatchTimerReport(WatchTimerState.OFF, 1_000L), nowMillis = 2_000L))
         assertFalse(isWatchActivityOngoing(null, nowMillis = 2_000L))
+    }
+
+    @Test
+    fun theWatchLeadsASessionItStartedForAsLongAsItsActivityIsGoing() {
+        fun led(state: WatchTimerState) = isSessionLedByWatch(
+            startedByWatch = true,
+            followWatchTimer = true,
+            report = WatchTimerReport(state, receivedAtMillis = 1_000L),
+            nowMillis = 2_000L,
+        )
+
+        assertTrue(led(WatchTimerState.RUNNING))
+        assertTrue(led(WatchTimerState.PAUSED))
+        // Stopped on the watch, not yet saved: resuming is still up to the watch.
+        assertTrue(led(WatchTimerState.STOPPED))
+        assertFalse(led(WatchTimerState.OFF))
+    }
+
+    @Test
+    fun aSessionStartedInTheAppStaysInTheHandsOfTheApp() {
+        val recording = WatchTimerReport(WatchTimerState.RUNNING, receivedAtMillis = 1_000L)
+
+        assertFalse(isSessionLedByWatch(startedByWatch = false, followWatchTimer = true, report = recording, nowMillis = 2_000L))
+        assertFalse(isSessionLedByWatch(startedByWatch = true, followWatchTimer = false, report = recording, nowMillis = 2_000L))
+        assertFalse(isSessionLedByWatch(startedByWatch = true, followWatchTimer = true, report = null, nowMillis = 2_000L))
+    }
+
+    @Test
+    fun aWatchThatFellSilentNoLongerLeadsSoTheSessionCanBeEndedInTheApp() {
+        val recording = WatchTimerReport(WatchTimerState.RUNNING, receivedAtMillis = 1_000L)
+
+        assertTrue(isSessionLedByWatch(startedByWatch = true, followWatchTimer = true, report = recording, nowMillis = 21_000L))
+        assertFalse(isSessionLedByWatch(startedByWatch = true, followWatchTimer = true, report = recording, nowMillis = 21_001L))
     }
 
     @Test

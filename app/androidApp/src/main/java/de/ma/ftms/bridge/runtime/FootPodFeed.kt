@@ -3,27 +3,6 @@ package de.ma.ftms.bridge.runtime
 import de.ma.ftms.core.RscMeasurement
 import de.ma.ftms.core.SmoothedTreadmillSample
 
-/** What the running sensor the app provides for the watch is doing. */
-enum class FootPodStatus {
-    /** Not wanted, or the bridge is not running. */
-    OFF,
-
-    /** This phone cannot act as a Bluetooth sensor. */
-    UNSUPPORTED,
-
-    /** Android has not been allowed to make the phone visible as a sensor. */
-    PERMISSION_MISSING,
-
-    /** Visible, but no watch has subscribed to the measurements yet. */
-    ADVERTISING,
-
-    /** A watch receives the measurements. */
-    CONNECTED,
-
-    /** The sensor could not be set up. */
-    FAILED,
-}
-
 /**
  * Turns the treadmill's samples into the measurements the app sends to the watch as a running
  * sensor: at most one per [minIntervalMillis], with a distance that never runs backwards.

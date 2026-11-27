@@ -49,6 +49,8 @@ Du brauchst sowohl die Android-App als auch das Garmin-Connect-IQ-Datenfeld auf 
 
 Die App speichert Sessions lokal und zeigt Verlauf, Diagramme und Diagnose-Logs. Die Uhr schreibt empfangene Werte als Connect-IQ-FIT-Developer-Fields.
 
+Die App hat vier Tabs: `Dashboard`, `Verlauf`, `Geräte` und `Einstellungen`. Das Dashboard hat keine Titelzeile, der Platz gehört den Werten. Die Einstellungen führen ihre Seiten unter den Überschriften `Bridge`, `Anzeige`, `Diagnose` und `Über die App` auf; eine Seite nennt sich in der Titelzeile, der Pfeil daneben führt zurück. Die Logs sind eine Seite unter `Einstellungen > Logs`. Die Zurück-Taste schließt zuerst, was in einem Tab offen ist (eine Einstellungsseite, eine Session im Verlauf), führt dann zum Dashboard und verlässt die App von dort.
+
 ### Gerätetyp
 
 Im Tab `Geräte` wählst du, was das ausgewählte Gerät ist: `Laufband`, `Indoor Cycling` oder `Crosstrainer`. Nennt ein Gerät seinen Typ beim Advertising, ist er bei der Auswahl vorbelegt; ändern kannst du ihn, solange die Bridge gestoppt ist.
@@ -59,9 +61,21 @@ Im Tab `Geräte` wählst du, was das ausgewählte Gerät ist: `Laufband`, `Indoo
 - Angeboten und gezeigt wird nur, was zum Typ gehört: keine Pace auf dem Bike, kein Widerstand auf dem Laufband, und die Kadenz heißt auf dem Laufband `Schrittfrequenz` (spm), sonst `Kadenz` (rpm).
 - Während einer Session lässt das Dashboard weg, was Gerät und Uhr bisher nicht geliefert haben: keine Kachel, kein Diagramm und keine Zeile unter `Quellen` für eine Herzfrequenz, die niemand misst. Sie erscheint, sobald der erste Wert ankommt.
 - Jedes Diagramm hat eine Werteachse mit runden Zahlen, darunter die Zeit seit Beginn der Session und darüber den aktuellen Wert, dazu Durchschnitt und Maximum, wo sie etwas aussagen. Lege einen Finger auf ein Diagramm, um den Wert zu diesem Zeitpunkt abzulesen. Die Distanz gibt es nur als Live-Wert: Als Diagramm wäre sie eine Linie, die nur steigt.
-- Jede Session wird mit ihrem Typ gespeichert. Der Verlauf zeigt den Typ, lässt unpassende Werte weg und lässt sich nach Typ filtern, sobald mehr als ein Typ gespeichert ist. Sessions aus älteren Versionen erhalten ihren Typ aus den enthaltenen Daten.
+- Jede Session wird mit ihrem Typ gespeichert. Der Verlauf zeigt den Typ, lässt unpassende Werte weg und lässt sich nach Typ filtern, sobald mehr als ein Typ gespeichert ist (siehe [Verlauf](#verlauf)). Sessions aus älteren Versionen erhalten ihren Typ aus den enthaltenen Daten.
 - Die Leistungsschätzung für das Laufband gilt nur für Laufbänder.
 - Sendet das Gerät Daten eines anderen Typs als gewählt, weist das Dashboard darauf hin.
+
+### Verlauf
+
+Der Tab `Verlauf` listet die gespeicherten Sessions nach Monat, die neueste zuerst.
+
+- Oben stehen die Summen: Anzahl der Sessions, Distanz, Dauer und, wo ein Gerät steigen kann, der Anstieg. Mit `Woche`, `Monat`, `Jahr` und `Gesamt` wählst du, ob sie für die laufende Woche, den laufenden Monat, das laufende Jahr oder für alle Sessions gelten. Die Woche beginnt mit dem Wochentag, mit dem sie in der Region des Telefons beginnt.
+- Jeder Monat nennt in seiner Überschrift, was seine Sessions zusammen ergeben. Eine Zeile zeigt Tag und Uhrzeit, die drei wichtigsten Werte des Gerätetyps (Laufband: Distanz, Dauer, Ø Pace; Indoor Bike: Dauer, Ø Leistung, Distanz; Crosstrainer: Distanz, Dauer, Ø Geschwindigkeit) und die durchschnittliche Herzfrequenz, falls eine aufgezeichnet wurde. Eine Session, die nicht regulär endete, ist als `unterbrochen` markiert.
+- Ein Tipp auf eine Zeile öffnet die Session auf einer Seite: oben die Kennzahlen, darunter die Diagramme, dann `Alle Werte`, der Vergleich `Gerät und Uhr` und die `Technischen Angaben` (Status, Gerät, Uhr, Pakete, Sendungen, letzter Fehler). Die drei Abschnitte lassen sich auf- und zuklappen; die technischen Angaben sind anfangs zu.
+- Die Diagramme einer Session reichen alle über die ganze Session und zeigen ohne Berührung den Durchschnitt. Lege einen Finger auf eines, dann zeigen alle den Wert zu diesem Zeitpunkt.
+- Welche Diagramme eine Session zeigt und in welcher Reihenfolge, legst du unter `Einstellungen > Verlauf` je Gerätetyp fest: anhaken, abwählen und mit den Pfeilen verschieben. Ein Diagramm, für das eine Session keine Werte hat, bleibt dort weg.
+- Halte eine Zeile gedrückt, um die Session zu markieren; danach markiert ein Tipp weitere oder nimmt eine Markierung zurück. Die Kopfzeile zählt die markierten Sessions, ihr Menü bietet `Session löschen` oder `Sessions löschen` an und fragt vor dem Löschen nach. Das Kreuz oben links oder die Zurück-Taste hebt die Markierung auf; sie endet auch, wenn du den Filter wechselst oder den Tab verlässt. Eine Session, die gerade aufzeichnet, lässt sich nicht markieren.
+- Ohne Markierung löscht das Menü oben rechts in der Liste den ganzen Verlauf und in einer Session diese Session. Zurück zur Liste führt der Pfeil oben links oder die Zurück-Taste.
 
 ### Zielleistung für ein Indoor Bike
 
@@ -83,6 +97,68 @@ Das Bike muss den FTMS Control Point mit „Set Target Power“ anbieten. Fehlt 
 
 Das Bike hält die Zielleistung nach seiner eigenen Messung. Zeigst du stattdessen die Leistung von Pedalen an (siehe unten), kann dieser Wert um einige Prozent von der Zielleistung abweichen; die App gleicht das nicht aus.
 
+### Geschwindigkeit und Steigung eines Laufbands
+
+Ein Laufband wird nur gelesen, solange du nichts anderes einstellst. Mit `Einstellungen > Laufband > Laufband aus der App steuern` (standardmäßig aus) zeigt das Dashboard beim Typ `Laufband` die Karte `Laufband steuern`:
+
+- Die Karte hängt am Laufband, nicht an einer Session: Sie ist da, sobald die App mit dem Laufband verbunden ist und es solche Vorgaben annimmt, und ihre Tasten gehen, sobald das Band läuft. Damit das auch ohne Session klappt, verbindet sich die App mit dem gewählten Laufband, solange sie geöffnet ist. Am Ende einer Session verschwindet die Karte für einige Sekunden, bis diese Verbindung wieder steht.
+- Sie zeigt Geschwindigkeit und Steigung, wie das Laufband sie meldet, und daneben das Ziel, solange das Band noch auf dem Weg dorthin ist.
+- Die Geschwindigkeit hat zwei Tastenpaare: den kleinsten Schritt des Laufbands (meist 0,1 km/h) und den großen Schritt aus den Einstellungen (0,5 oder 1 km/h). Die Steigung ändert sich um den Schritt des Laufbands.
+- Tippe auf eine Schnellwahl, um Geschwindigkeit oder Steigung direkt zu setzen. Macht eine Schnellwahl das Band um mehr als 3 km/h schneller, fragt die App vorher nach; das lässt sich in den Einstellungen abschalten. Eine Schnellwahl außerhalb dessen, was das Laufband annimmt, ist ausgegraut.
+- Liegt die neue Geschwindigkeit mehr als 0,5 km/h entfernt, führt die App das Band in kleinen Schritten dorthin, statt nur das Ziel zu senden (`Einstellungen > Laufband > Übergang`, Standard `Sanft`): Das Tempo des Wechsels baut sich auf, hält und klingt vor dem Ziel aus, und gebremst wird zügiger als beschleunigt. `Sanft` ändert höchstens 0,4 km/h pro Sekunde nach oben und 0,6 nach unten (von 6 auf 9,2 km/h in rund 10 Sekunden), `Sehr sanft` 0,25 und 0,4. Mit `Direkt` fährt das Laufband in seinem eigenen Tempo zum Ziel. Die Karte zeigt währenddessen `Sanfter Übergang auf …`.
+- Unter `Einstellungen > Laufband` legst du die Schnellwahlen an und entfernst sie: je bis zu 8, für die Geschwindigkeit von 0,5 bis 25 km/h in Schritten von 0,1 km/h (Standard 6, 8, 10 und 12 km/h), für die Steigung von 0 bis 40 % in Schritten von 0,5 % (Standard 0, 1, 2 und 5 %).
+
+Ein Band trägt einen Menschen, deshalb gelten hier strengere Regeln als bei der Zielleistung eines Bikes:
+
+- Die App startet und stoppt das Band nie. Sie sendet keine Geschwindigkeit unter 0,5 km/h, und solange das Band steht, sind die Tasten gesperrt. Gestartet und gestoppt wird an der Konsole.
+- Die App sendet nur, was du antippst: nichts beim Verbinden, nichts nach einem Verbindungsabbruch, nichts beim Fortsetzen einer Pause, und keinen Wert ein zweites Mal. Die Werte eines Übergangs gehören alle zu dem einen Tipp, der ihn ausgelöst hat. Die einzige Ausnahme schaltest du selbst ein: das Folgen eines Workouts der Uhr (siehe unten).
+- Ein Übergang läuft dem Band nie davon: Meldet das Laufband eine Geschwindigkeit, die mehr als 0,6 km/h hinter dem zuletzt gesendeten Wert liegt, wartet die App. Folgt das Band 10 Sekunden lang nicht, wird es an der Konsole verstellt oder schweigt das Laufband länger als 5 Sekunden, bricht die App den Übergang ab und setzt ihn nicht fort.
+- Was du zuletzt eingestellt hast, vergisst die App, sobald die Verbindung endet, das Band steht, das Laufband den Wert ablehnt oder nicht antwortet, oder das Band den Wert erreicht hat und wieder davon abweicht (jemand hat die Konsole benutzt). Die Tasten gehen dann von dem aus, was das Laufband meldet.
+- Meldet das Laufband länger als 5 Sekunden keine Geschwindigkeit, sendet die App nichts.
+
+Das Laufband muss den FTMS Control Point mit „Set Target Speed“ oder „Set Target Inclination“ anbieten; was es davon nicht anbietet, fehlt auf der Karte, und ohne beides erscheint sie nicht. Getestet mit einem Darwin TM 70 (FitShow-Modul), bisher mit einzelnen Befehlen von einem Rechner aus und in der App, samt Übergängen, an einem simulierten Laufband.
+
+### Dem Workout der Uhr folgen
+
+Läuft auf der Uhr ein Workout mit Tempo-Zielen, kann die App die Geschwindigkeit des Laufbands Schritt für Schritt danach einstellen (`Einstellungen > Laufband > Dem Workout der Uhr folgen`, standardmäßig aus). Das Datenfeld meldet der App dafür, in welchem Schritt die Uhr ist und welcher folgt. Die Uhr bleibt die Quelle: Schrittanzeige, Lap-Taste und das Ergebnis in Garmin Connect ändern sich nicht.
+
+- Es braucht eine laufende Session, die Laufband-Steuerung (oben) und ein Band, das läuft. Das Band startest und stoppst du weiter an der Konsole.
+- Die App sendet einmal, wenn die Uhr einen Schritt mit Tempo beginnt, und zwar die Mitte der Tempo-Spanne (6:30–6:32 min/km ergibt 9,2 km/h). Läuft das Band schon so schnell, sendet sie nichts. Ein Schritt ohne Tempo lässt das Band in Ruhe.
+- Zwischen den Schritten sendet sie nichts: Was du von Hand oder an der Konsole einstellst, bleibt bis zum nächsten Schritt.
+- Sie verlangt nie mehr als die eingestellte Höchstgeschwindigkeit (Standard 12 km/h), sendet nichts, solange die Aktivität auf der Uhr nicht aufzeichnet, und ein kurzer Ton am Telefon kündigt an, dass das Band schneller wird (abschaltbar).
+- Die Karte `Laufband steuern` zeigt, was gilt und was kommt: `Folgt dem Workout der Uhr: jetzt 6,0 km/h · in 0:42 9,2 km/h`.
+- Wie viel von einem Schritt noch übrig ist, sagt die Uhr einer App nicht. Das Datenfeld schickt deshalb mit, wie lange der Schritt nach dem Aktivitäts-Timer der Uhr schon läuft, und wiederholt das alle 10 Sekunden; die App zählt dazwischen weiter. So stimmt die Restzeit auch, wenn die App mitten im Schritt dazukommt oder eine Meldung verloren geht. Mit einem älteren Datenfeld zählt die App ab der Meldung, die den Schritt angekündigt hat, und liegt um deren Verspätung daneben. Ein Schritt, der mit der Lap-Taste endet, hat keine Restzeit.
+
+`Übergang zwischen den Schritten` legt fest, wie das Band von einem Tempo zum nächsten kommt:
+
+- `Aus`: keine eigene Beschleunigung. Die App sendet zu Beginn des Schritts das Tempo, und das Laufband beschleunigt und bremst, wie es das selbst tut.
+- `Sanft`: Jeder Wechsel beginnt mit dem Schritt und wird sanft geführt, wie oben beschrieben.
+- `Intelligent` (Standard): sanft, wo Zeit dafür ist, und direkt, wo der Schritt, in den der Wechsel fällt, kurz ist (einstellbar, Standard unter 1:00 min). Vor einem schnelleren Schritt beschleunigt das Band so rechtzeitig, dass es zu dessen Beginn auf Tempo ist; dafür nimmt es höchstens die Hälfte des laufenden Schritts. Gebremst wird erst, wenn der langsamere Schritt begonnen hat. Vorbereiten lässt sich nur ein Schritt, der auf einen Schritt mit fester Dauer folgt, nicht einer nach der Lap-Taste.
+- `Dauer eines sanften Wechsels`: `Wie oben` nimmt das Tempo aus `Übergang`; mit 5 bis 30 Sekunden dauert jeder sanfte Wechsel etwa so lange, egal wie groß er ist. Schneller als das Laufband selbst wird er dadurch nicht.
+
+Noch nicht an der Uhr erprobt: Garmin beschreibt nicht, in welchen Einheiten eine Uhr Tempo und Dauer eines Schritts meldet. Die App liest sie so, wie andere Entwickler sie beobachtet haben (Meter pro Sekunde, Sekunden), und verwirft, was nicht dazu passt. Lass beim ersten Workout das Folgen aus: Die Karte zeigt dann trotzdem `Workout der Uhr (wird nicht befolgt): jetzt … · in … …`, und du siehst, ob Tempo und Restzeit zu dem passen, was die Uhr anzeigt.
+
+### Workout-Ansicht
+
+Solange die Uhr in einem Workout ist, gibt es dafür eine eigene Ansicht im Querformat, gedacht für das Telefon auf der Ablage des Laufbands: groß, dunkel und aus der Bewegung lesbar.
+
+- Links der Schritt, in dem die Uhr ist: ein Ring, der sich mit dem Schritt füllt, darin die Restzeit und das Tempo, das der Schritt verlangt. Ein Lauf-Schritt ist gelbgrün, eine Erholung blau. Ein Schritt ohne feste Dauer hat einen gestrichelten Ring und zählt hoch; endet er mit der Lap-Taste, steht das dabei. Pausiert die Aktivität auf der Uhr, bleibt die Zeit stehen und über ihr steht `Pausiert`.
+- Darunter der Schritt, der folgt, mit Dauer und Tempo. Beschleunigt das Band schon vor dessen Beginn (Übergang `Intelligent`), wird die Karte hervorgehoben und sagt `Band zieht schon an für`.
+- Rechts vier Werte. Ein Tipp auf einen Wert öffnet die Auswahl, was das Feld zeigt: Geschwindigkeit, Pace, Ø Pace, Herzfrequenz, Distanz, verstrichene Zeit, Steigung, Anstieg, Schrittfrequenz oder Leistung. Wählst du einen Wert, den ein anderes Feld schon zeigt, tauschen die beiden die Plätze. Die Auswahl bleibt gespeichert.
+- Startet die Uhr die Session (siehe `Mit der Uhr starten und stoppen`), wechselt die App sofort in diese Ansicht und dreht den Bildschirm dafür selbst ins Querformat, auch bei gesperrter Drehung. Läuft auf der Uhr noch kein Workout, zeigt der Ring so lange die Zeit der Session (`Freier Lauf`); mit dem ersten Schritt eines Workouts wechselt er auf dessen Restzeit. War die App beim Start nicht im Vordergrund, steht die Ansicht da, sobald du sie öffnest.
+- Bei einer Session, die du in der App startest, kommt die Ansicht von selbst, sobald die Uhr in einem Workout ist und das Telefon quer liegt.
+- Das `X` oben links führt zurück ins Dashboard. Danach bleibt sie für diese Session zu, bis du sie über die Karte oben im Dashboard wieder öffnest (`Workout der Uhr läuft` oder `Workout-Ansicht`); ein Workout auf der Uhr bringt sie außerdem zurück, wenn das Telefon einmal hochkant war und wieder quer liegt.
+- Ist `Einstellungen > Laufband > Laufband aus der App steuern` an und nimmt das Laufband Befehle an, stellst du das Band auch von hier:
+  - Links und rechts unten neben dem Ring stehen `−` und `+` für die Geschwindigkeit. Ein Tipp ist der kleinste Schritt des Laufbands (meist 0,1 km/h).
+  - Zeigt eines der vier Felder die Steigung, hat es rechts einen Pfeil nach oben und einen nach unten. Ein Tipp ist der kleinste Schritt des Laufbands. Solange das Laufband noch dorthin fährt, steht die verlangte Steigung zwischen den Pfeilen.
+  - Hältst du eine Taste gedrückt, zählt sie nach knapp einer halben Sekunde von selbst weiter, und die Schritte addieren sich: bei der Geschwindigkeit etwa 0,7 km/h je Sekunde, bei der Steigung ein Schritt alle 0,4 Sekunden. Einmal Halten macht das Band höchstens 3 km/h schneller; für mehr loslassen und neu drücken. Langsamer ist nicht begrenzt.
+  - Eine von Hand gestellte Geschwindigkeit steht im Ring als `von Hand` an der Stelle von `Ziel`. Sie gilt bis zum nächsten Schritt des Workouts; folgt die App dem Workout, stellt sie dann wieder dessen Tempo.
+  - Steht das Band, sind die Tasten blass und tun nichts: gestartet und gestoppt wird an der Konsole.
+- Die Ansicht braucht eine laufende Session mit einem Laufband, aber weder die Laufband-Steuerung noch das Folgen: Auch wer das Band selbst bedient, sieht Schritt und Restzeit. Ohne die Steuerung hat sie keine Tasten für das Band.
+- Die Systemleisten sind ausgeblendet und kommen mit einem Wisch vom Rand zurück. Die Schriftgröße des Systems ändert die Ansicht nicht, weil sie den Bildschirm schon ganz ausnutzt.
+
+Woher die Schritte kommen und was daran noch nicht an der Uhr erprobt ist, steht im Abschnitt davor. Die Ziffern sind in Barlow Condensed gesetzt (SIL Open Font License, siehe `app/androidApp/licenses/BarlowCondensed-OFL.txt`).
+
 ### Werte der Uhr
 
 Die Uhr sendet ihre Herzfrequenz an das Telefon und dazu die Leistung und Kadenz, die sie für die laufende Aktivität hat. Dazu gehören Sensoren, die mit der Uhr gekoppelt sind, etwa ein Brustgurt oder Leistungsmesser-Pedale. Die App verbindet sich nicht selbst mit diesen Sensoren.
@@ -91,7 +167,8 @@ Die Uhr sendet ihre Herzfrequenz an das Telefon und dazu die Leistung und Kadenz
 - Voreingestellt ist die Herzfrequenz von der Uhr, Leistung und Kadenz vom Gerät.
 - Der gewählte Wert gilt für die Anzeige, den Verlauf und die an die Uhr gesendeten Werte.
 - Liefert die gewählte Quelle 5 Sekunden lang nichts, bleibt der Wert leer; die Herzfrequenz der Uhr bleibt 15 Sekunden stehen, weil sie sich langsam ändert und die Nachrichten der Uhr Sekunden brauchen können. Die App wechselt nicht von selbst zur anderen Quelle.
-- Beide Werte werden mit der Session gespeichert. Enthält eine Session beide, zeigt der Verlauf den Durchschnitt je Quelle, die Abweichung und ein Diagramm mit beiden Linien.
+- Beide Werte werden mit der Session gespeichert. Enthält eine Session beide, zeigt der Verlauf den Durchschnitt je Quelle und die Abweichung.
+- Die Diagramme für Herzfrequenz, Leistung und Kadenz zeigen beide Quellen, im Dashboard und im Verlauf: die gewählte Quelle in Schwarz (auf dunklem Bildschirm in Weiß), die andere in Rot und etwas dünner, beide in der Legende benannt. Hinter dem Durchschnitt der gewählten Quelle steht der der anderen in Klammern und in Rot, etwa `Ø 148 (150) spm`; genauso stehen diese Durchschnitte in einer Session unter `Alle Werte`. Im Verlauf gilt als gewählt, was jetzt für diesen Gerätetyp eingestellt ist.
 - Die Leistungsschätzung für das Laufband zählt als Wert des Geräts.
 - Die Werte der Uhr erscheinen, solange das Gerät Daten sendet.
 
@@ -121,6 +198,20 @@ Das Relais ist `tools/footPodRelay/foot_pod_relay.py`. Es braucht Linux mit Blue
 4. Aktivität an der Uhr starten. Die Session startet (siehe „Mit der Uhr starten und stoppen"), das Telefon bietet seinen Sensor an, das Relais reicht ihn weiter.
 
 Getestet mit einer Forerunner 970 (Firmware 19.23) und BlueZ 5.82. Beim ersten Versuch stürzte die Firmware der Uhr acht Sekunden nach dem Hinzufügen des Sensors ab, während bereits Messwerte flossen; spätere Versuche, bei denen sich die Uhr vor dem Start der Session verband, liefen ohne Problem. Die Ursache ist nicht bekannt.
+
+#### Mit einem Relais auf einem zweiten Telefon
+
+Dasselbe Relais als Android-App, für ein übriges Telefon, das in der Nähe des Laufbands bleibt: FTMS Relay (`app/relayApp`).
+
+    Laufband --FTMS--> Telefon (Bridge-App) --Laufsensor--> zweites Telefon (FTMS Relay) --Laufsensor--> Uhr
+
+1. `relayApp-debug.apk` auf dem zweiten Telefon installieren, öffnen, `Relay starten` antippen und „Geräte in der Nähe" erlauben. Das zweite Telefon darf keines sein, mit dem die Uhr gekoppelt ist.
+2. `Hintergrundbetrieb erlauben` antippen, falls die App es anbietet. Auf Telefonen, die selbst entscheiden, welche Apps starten dürfen (Honor, Huawei, Xiaomi), der App zusätzlich in den Systemeinstellungen den automatischen Start erlauben; sonst kommt das Relais nach einem Neustart des Telefons nicht von selbst zurück, und du musst die App einmal öffnen.
+3. Weiter mit den Schritten 2 bis 4 oben; an der Uhr das zweite Telefon als Laufsensor auswählen.
+
+Die App zeigt, ob sie das Telefon mit der Bridge gefunden hat, ob eine Uhr die Messwerte empfängt und wie viele durchgegangen sind. Den Sensor der Bridge erkennt sie am Modell, das dieser meldet; andere Laufsensoren in Reichweite, etwa einen Brustgurt, lässt sie in Ruhe. Ihre Ereignisse schreibt sie nach `files/logs/relay.log` im Datenverzeichnis der App.
+
+Getestet mit einem Honor 70 (Android 14) und einem Rechner, der Bridge und Uhr gespielt hat: Jeder Messwert kam unverändert an, etwa 60 ms später. Eine Forerunner 970 hat das Telefon als Laufsensor gefunden und sich beim Hinzufügen mit ihm gekoppelt (Android fragt auf dem zweiten Telefon womöglich nach, ob gekoppelt werden soll). Ein Android-Telefon ist unter einer zufälligen Bluetooth-Adresse sichtbar, die bei jedem Start des Relais eine neue ist; die gekoppelte Uhr hat es unter neuer Adresse wiedergefunden. Ein vollständiges Training über das zweite Telefon steht noch aus.
 
 #### Ohne Relais: Sensor statt Datenfeld
 
@@ -153,7 +244,8 @@ Mit `Einstellungen > Bridge-Verhalten > Aktivität der Uhr folgen` (standardmä�
 - Speicherst oder verwirfst du die Aktivität, endet die Session.
 - Beim Start der Aktivität muss die App auf dem Telefon geöffnet sein, außer sie wartet im Hintergrund (siehe unten). Laufband und Uhr müssen ausgewählt sein. Die Uhr braucht das Datenfeld dieser Version; ein älteres Datenfeld meldet die Aktivität nicht.
 - Ohne Session auf dem Telefon verbindet sich das Datenfeld selbst mit dem Laufband. Startet die Session, gibt es die Verbindung an das Telefon ab und zeigt `PWAIT`, bis das Telefon Daten hat; das kann ein paar Sekunden dauern.
-- `Start`, `Pause` und `Stop` in der App funktionieren weiter. Was du dort tust, bleibt bestehen, bis sich der Zustand der Aktivität an der Uhr wieder ändert.
+- Eine Session, die die Uhr gestartet hat, führt die Uhr: Die App zeigt dafür weder in der App noch in ihrer Benachrichtigung `Pause` und `Stop`, du pausierst und beendest sie an der Uhr. Hat die App 20 Sekunden lang nichts von der Uhr gehört, kommen die Schaltflächen zurück, damit sich eine Session auch dann beenden lässt, wenn die Uhr außer Reichweite ist.
+- Bei einer Session, die du in der App gestartet hast, funktionieren `Pause` und `Stop` in der App weiter. Was du dort tust, bleibt bestehen, bis sich der Zustand der Aktivität an der Uhr wieder ändert.
 - Läuft beim Start der Aktivität bereits eine Session, läuft sie einfach weiter. Soll die Session genau die Aktivität abdecken, lass `Automatisch starten` aus und überlass den Start der Uhr.
 
 #### Im Hintergrund warten
@@ -243,7 +335,7 @@ Das Datenfeld überschreibt nicht Garmins native Distanz, Geschwindigkeit, Power
 
 - Starte die Aktivität auf der Uhr, bevor du die Bridge startest.
 - Prüfe, ob die Android-App das Laufband als verbunden anzeigt.
-- Öffne den Logs-Bildschirm in der Android-App.
+- Öffne `Einstellungen > Logs` in der Android-App.
 - Stoppe und starte die Bridge neu, nachdem andere BLE-Apps vom Laufband getrennt wurden.
 
 ### Distanz oder Kadenz wirken falsch
@@ -274,13 +366,17 @@ Android-/Shared-Checks ausführen:
 ./gradlew :app:shared:jvmTest \
   :app:androidApp:testDebugUnitTest \
   :app:androidApp:lintDebug \
-  :app:androidApp:assembleDebug
+  :app:androidApp:assembleDebug \
+  :app:relayApp:testDebugUnitTest \
+  :app:relayApp:lintDebug \
+  :app:relayApp:assembleDebug
 ```
 
-Die Debug-APK wird hier erstellt:
+Die Debug-APKs werden hier erstellt:
 
 ```text
 app/androidApp/build/outputs/apk/debug/androidApp-debug.apk
+app/relayApp/build/outputs/apk/debug/relayApp-debug.apk
 ```
 
 ## Garmin-Datenfeld bauen
@@ -324,6 +420,7 @@ Weitere Hinweise zu IntelliJ und dem Garmin SDK stehen in [INTELLIJ.md](INTELLIJ
 ```text
 app/androidApp/       Android-Bridge-App
 app/garminDataField/  Garmin-Connect-IQ-Datenfeld
+app/relayApp/         Android-Relay-App, die den Laufsensor von einem zweiten Telefon aus weiterreicht
 app/shared/           Kotlin-Multiplatform-FTMS-Parser, Glättung, Storage-Modelle
 docs/                 Connect-IQ-Store-Unterlagen und Assets
 tools/ftmsProbe/      Linux-FTMS-Validierungsprobe

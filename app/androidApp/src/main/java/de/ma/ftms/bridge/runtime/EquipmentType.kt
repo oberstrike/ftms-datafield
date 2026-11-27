@@ -67,6 +67,47 @@ fun dashboardGraphOptions(type: EquipmentType): List<DashboardMetricKey> =
         DEFAULT_DASHBOARD_GRAPHS.filter { it.appliesTo(type) }
     }
 
+/** Charts offered for a recorded session of [type]. */
+fun historyChartOptions(type: EquipmentType): List<DashboardMetricKey> =
+    dashboardGraphOptions(type)
+
+/**
+ * The charts a recorded session of [type] shows unless the user chose others, in their order: what
+ * the session was about first, running averages last. The ascent rate is offered but not shown by
+ * default; it follows from speed and incline.
+ */
+fun defaultHistoryCharts(type: EquipmentType): List<DashboardMetricKey> =
+    when (type) {
+        EquipmentType.TREADMILL -> listOf(
+            DashboardMetricKey.SPEED,
+            DashboardMetricKey.HEART_RATE,
+            DashboardMetricKey.PACE,
+            DashboardMetricKey.CADENCE_STEP,
+            DashboardMetricKey.INCLINE,
+            DashboardMetricKey.ASCENT,
+            DashboardMetricKey.POWER,
+            DashboardMetricKey.AVG_PACE,
+            DashboardMetricKey.AVG_INCLINE,
+        )
+        EquipmentType.INDOOR_BIKE -> listOf(
+            DashboardMetricKey.POWER,
+            DashboardMetricKey.HEART_RATE,
+            DashboardMetricKey.CADENCE_STEP,
+            DashboardMetricKey.SPEED,
+            DashboardMetricKey.RESISTANCE,
+        )
+        EquipmentType.CROSS_TRAINER -> listOf(
+            DashboardMetricKey.SPEED,
+            DashboardMetricKey.HEART_RATE,
+            DashboardMetricKey.CADENCE_STEP,
+            DashboardMetricKey.POWER,
+            DashboardMetricKey.RESISTANCE,
+            DashboardMetricKey.INCLINE,
+            DashboardMetricKey.ASCENT,
+            DashboardMetricKey.AVG_INCLINE,
+        )
+    }
+
 fun defaultDashboardLayout(type: EquipmentType): DashboardLayout =
     when (type) {
         EquipmentType.TREADMILL -> DashboardLayout(

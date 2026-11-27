@@ -1,6 +1,15 @@
 package de.ma.ftms.bridge.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.style.TextOverflow
+import de.ma.ftms.bridge.i18n.Strings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -55,31 +64,141 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import de.ma.ftms.bridge.ble.advertisePermissions
-import de.ma.ftms.bridge.ble.hasAdvertisePermission
+import de.ma.ftms.footpod.hasAdvertisePermission
 import de.ma.ftms.bridge.runtime.BridgeRuntime
 import de.ma.ftms.bridge.runtime.dashboardGraphOptions
+import de.ma.ftms.bridge.runtime.historyChartOptions
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.Role
 import de.ma.ftms.bridge.runtime.dashboardMetricOptions
 import de.ma.ftms.bridge.runtime.SourcedMetric
 import de.ma.ftms.bridge.runtime.ValueSource
 import de.ma.ftms.bridge.runtime.PowerSource
+import de.ma.ftms.bridge.runtime.LARGE_SPEED_INCREASE
+import de.ma.ftms.bridge.runtime.MAX_TREADMILL_PRESETS
+import de.ma.ftms.bridge.runtime.TREADMILL_FOLLOW_MAX_SPEED_OPTIONS
+import de.ma.ftms.bridge.runtime.TREADMILL_FOLLOW_SHORT_STEP_OPTIONS
+import de.ma.ftms.bridge.runtime.TREADMILL_FOLLOW_TRANSITION_OPTIONS
+import de.ma.ftms.bridge.runtime.TREADMILL_RAMP_MIN_CHANGE
+import de.ma.ftms.bridge.runtime.TREADMILL_SPEED_STEP_OPTIONS
+import de.ma.ftms.bridge.runtime.TreadmillRampProfile
+import de.ma.ftms.bridge.runtime.TreadmillSetting
+import de.ma.ftms.bridge.runtime.WorkoutTransitionMode
+import de.ma.ftms.bridge.runtime.defaultPresets
+import de.ma.ftms.bridge.runtime.isNewTreadmillPresetAllowed
+import de.ma.ftms.bridge.runtime.parseTreadmillValue
+import de.ma.ftms.bridge.runtime.presetGrid
+import de.ma.ftms.bridge.runtime.presetRange
 
 @Composable
 fun SettingsView(component: SettingsComponent) {
     val childStack by component.childStack.subscribeAsState()
-    Children(stack = childStack) { child ->
-        when (child.instance) {
+    Children(stack = childStack) { created ->
+        when (val child = created.instance) {
             SettingsComponent.Child.Overview -> SettingsOverviewView(component)
             SettingsComponent.Child.Bridge -> BridgeSettingsView(component)
             SettingsComponent.Child.Power -> PowerSettingsView(component)
             SettingsComponent.Child.Dashboard -> DashboardSettingsView(component)
+            SettingsComponent.Child.History -> HistorySettingsView(component)
             SettingsComponent.Child.IndoorCycling -> IndoorCyclingSettingsView(component)
+            SettingsComponent.Child.Treadmill -> TreadmillSettingsView(component)
             SettingsComponent.Child.Sources -> SourcesSettingsView(component)
             SettingsComponent.Child.Timing -> TimingSettingsView(component)
             SettingsComponent.Child.Language -> LanguageSettingsView(component)
             SettingsComponent.Child.Debug -> DebugSettingsView(component)
+            is SettingsComponent.Child.Logs -> LogsView(component = child.component)
             SettingsComponent.Child.RememberedDevices -> RememberedDevicesSettingsView(component)
             SettingsComponent.Child.OpenSource -> OpenSourceSettingsView(component)
         }
+    }
+}
+
+/** The pages of the settings in the order and under the headings the overview lists them. */
+internal enum class SettingsGroup(val pages: List<SettingsConfig>) {
+    BRIDGE(
+        listOf(
+            SettingsConfig.Bridge,
+            SettingsConfig.Sources,
+            SettingsConfig.Power,
+            SettingsConfig.IndoorCycling,
+            SettingsConfig.Treadmill,
+            SettingsConfig.Timing,
+        ),
+    ),
+    DISPLAY(listOf(SettingsConfig.Dashboard, SettingsConfig.History, SettingsConfig.Language)),
+    DIAGNOSTICS(listOf(SettingsConfig.Logs, SettingsConfig.Debug, SettingsConfig.RememberedDevices)),
+    ABOUT(listOf(SettingsConfig.OpenSource)),
+}
+
+private fun SettingsGroup.title(strings: Strings): String =
+    when (this) {
+        SettingsGroup.BRIDGE -> strings.settings.groupBridge
+        SettingsGroup.DISPLAY -> strings.settings.groupDisplay
+        SettingsGroup.DIAGNOSTICS -> strings.settings.groupDiagnostics
+        SettingsGroup.ABOUT -> strings.settings.groupAbout
+    }
+
+internal fun SettingsConfig.title(strings: Strings): String =
+    when (this) {
+        SettingsConfig.Overview -> strings.settings.title
+        SettingsConfig.Bridge -> strings.settings.bridgeBehavior
+        SettingsConfig.Power -> strings.settings.powerEstimate
+        SettingsConfig.IndoorCycling -> strings.settings.indoorCycling
+        SettingsConfig.Treadmill -> strings.settings.treadmill
+        SettingsConfig.Sources -> strings.settings.dataSources
+        SettingsConfig.Dashboard -> strings.settings.dashboard
+        SettingsConfig.History -> strings.settings.history
+        SettingsConfig.Timing -> strings.settings.timing
+        SettingsConfig.Language -> strings.settings.language
+        SettingsConfig.Debug -> strings.settings.debug
+        SettingsConfig.Logs -> strings.settings.logs
+        SettingsConfig.RememberedDevices -> strings.settings.rememberedDevices
+        SettingsConfig.OpenSource -> strings.settings.openSource
+    }
+
+private fun SettingsConfig.subtitle(strings: Strings): String =
+    when (this) {
+        SettingsConfig.Overview -> ""
+        SettingsConfig.Bridge -> strings.settings.bridgeBehaviorSubtitle
+        SettingsConfig.Power -> strings.settings.powerEstimateSubtitle
+        SettingsConfig.IndoorCycling -> strings.settings.indoorCyclingSubtitle
+        SettingsConfig.Treadmill -> strings.settings.treadmillSubtitle
+        SettingsConfig.Sources -> strings.settings.dataSourcesSubtitle
+        SettingsConfig.Dashboard -> strings.settings.dashboardSubtitle
+        SettingsConfig.History -> strings.settings.historySubtitle
+        SettingsConfig.Timing -> strings.settings.timingSubtitle
+        SettingsConfig.Language -> strings.settings.languageSubtitle
+        SettingsConfig.Debug -> strings.settings.debugSubtitle
+        SettingsConfig.Logs -> strings.settings.logsSubtitle
+        SettingsConfig.RememberedDevices -> strings.settings.rememberedDevicesSubtitle
+        SettingsConfig.OpenSource -> strings.settings.openSourceSubtitle
+    }
+
+/**
+ * The title bar of the settings: the name of the page shown, and on every page below the
+ * overview the way back to it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsTopBar(component: SettingsComponent, strings: Strings) {
+    val childStack by component.childStack.subscribeAsState()
+    val page = childStack.active.configuration as? SettingsConfig ?: SettingsConfig.Overview
+    if (page == SettingsConfig.Overview) {
+        CenterAlignedTopAppBar(title = { Text(page.title(strings)) })
+    } else {
+        TopAppBar(
+            navigationIcon = {
+                IconButton(onClick = component::onBack) {
+                    Icon(BridgeUiIcons.ArrowBack, contentDescription = strings.common.back)
+                }
+            },
+            title = { Text(page.title(strings), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        )
     }
 }
 
@@ -90,90 +209,29 @@ private fun SettingsOverviewView(component: SettingsComponent) {
     ScreenContainer(title = strings.settings.title) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.bridgeBehavior,
-                    subtitle = strings.settings.bridgeBehaviorSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Bridge) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.powerEstimate,
-                    subtitle = strings.settings.powerEstimateSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Power) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.dashboard,
-                    subtitle = strings.settings.dashboardSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Dashboard) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.dataSources,
-                    subtitle = strings.settings.dataSourcesSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Sources) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.indoorCycling,
-                    subtitle = strings.settings.indoorCyclingSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.IndoorCycling) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.timing,
-                    subtitle = strings.settings.timingSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Timing) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.language,
-                    subtitle = strings.settings.languageSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Language) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.debug,
-                    subtitle = strings.settings.debugSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.Debug) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.rememberedDevices,
-                    subtitle = strings.settings.rememberedDevicesSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.RememberedDevices) },
-                )
-            }
-            item {
-                SettingsDestinationCard(
-                    title = strings.settings.openSource,
-                    subtitle = strings.settings.openSourceSubtitle,
-                    onClick = { component.navigateTo(SettingsConfig.OpenSource) },
-                )
-            }
-            item {
-                InfoCard {
-                    Text(
-                        strings.settings.appVersion,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        strings.settings.appVersionValue(appVersionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            SettingsGroup.entries.forEach { group ->
+                item(key = group.name) {
+                    SettingsGroupCard(title = group.title(strings)) {
+                        group.pages.forEachIndexed { index, page ->
+                            if (index > 0) SettingsRowDivider()
+                            SettingsDestinationRow(
+                                title = page.title(strings),
+                                subtitle = page.subtitle(strings),
+                                onClick = { component.navigateTo(page) },
+                            )
+                        }
+                        if (group == SettingsGroup.ABOUT) {
+                            SettingsRowDivider()
+                            SettingsValueRow(
+                                title = strings.settings.appVersion,
+                                value = strings.settings.appVersionValue(
+                                    appVersionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+                                ),
+                            )
+                        }
+                    }
                 }
             }
             item { VerticalGap() }
@@ -181,22 +239,73 @@ private fun SettingsOverviewView(component: SettingsComponent) {
     }
 }
 
+/** One heading with the pages below it in a single card, a row each. */
 @Composable
-private fun SettingsDestinationCard(
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    InfoCard(modifier = Modifier.clickable(onClick = onClick)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun SettingsGroupCard(title: String, rows: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 14.dp).semantics { heading() },
+        )
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            content = rows,
+        )
     }
 }
 
 @Composable
+private fun SettingsRowDivider() {
+    HorizontalDivider(
+        color = MaterialTheme.colorScheme.outlineVariant,
+        modifier = Modifier.padding(horizontal = 14.dp),
+    )
+}
+
+@Composable
+private fun SettingsDestinationRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(
+            BridgeUiIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SettingsValueRow(title: String, value: String) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** A page below the overview. Its name and the way back stand in the title bar. */
+@Composable
 private fun SettingsPageScaffold(
     title: String,
-    component: SettingsComponent,
     content: @Composable () -> Unit,
 ) {
     ScreenContainer(title = title) {
@@ -204,13 +313,6 @@ private fun SettingsPageScaffold(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = component::onBack, modifier = Modifier.weight(1f)) {
-                        Text(LocalStrings.current.common.back)
-                    }
-                }
-            }
             item { content() }
             item { VerticalGap() }
         }
@@ -229,7 +331,7 @@ private fun BridgeSettingsView(component: SettingsComponent) {
         BridgeRuntime.refreshPermissionState()
     }
 
-    SettingsPageScaffold(title = strings.settings.bridgeBehavior, component = component) {
+    SettingsPageScaffold(title = strings.settings.bridgeBehavior) {
         Section(strings.settings.bridgeBehavior) {
             SettingsToggleRow(
                 title = strings.settings.autoReconnect,
@@ -302,7 +404,7 @@ private fun PowerSettingsView(component: SettingsComponent) {
     val settings = state.settings
     val strings = LocalStrings.current
 
-    SettingsPageScaffold(title = strings.settings.powerEstimate, component = component) {
+    SettingsPageScaffold(title = strings.settings.powerEstimate) {
         Section(strings.settings.powerEstimate) {
             SettingsToggleRow(
                 title = strings.settings.powerEstimate,
@@ -356,7 +458,7 @@ private fun DashboardSettingsView(component: SettingsComponent) {
     var editedType by rememberSaveable { mutableStateOf(state.selectedEquipmentType) }
     val layout = settings.dashboardLayout(editedType)
 
-    SettingsPageScaffold(title = strings.settings.dashboard, component = component) {
+    SettingsPageScaffold(title = strings.settings.dashboard) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Section(strings.devices.equipmentType) {
                 ChoiceRow(
@@ -412,13 +514,52 @@ private fun DashboardSettingsView(component: SettingsComponent) {
     }
 }
 
+/** Which charts a recorded session shows, and in which order, per equipment type. */
+@Composable
+private fun HistorySettingsView(component: SettingsComponent) {
+    val state by component.state.collectAsStateWithLifecycle()
+    val settings = state.settings
+    val strings = LocalStrings.current
+
+    var editedType by rememberSaveable { mutableStateOf(state.selectedEquipmentType) }
+    val charts = settings.historyCharts(editedType)
+
+    SettingsPageScaffold(title = strings.settings.history) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.devices.equipmentType) {
+                ChoiceRow(
+                    title = strings.settings.historyEquipmentType,
+                    selected = editedType,
+                    options = EquipmentType.entries.toList(),
+                    label = { equipmentTypeLabel(it, strings) },
+                    onSelected = { editedType = it },
+                )
+            }
+            Section(strings.settings.historyCharts) {
+                Text(
+                    strings.settings.historyChartsSubtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OrderedChoiceList(
+                    selected = charts,
+                    options = historyChartOptions(editedType),
+                    label = { it.label(strings, editedType) },
+                    minimumSelectionText = strings.settings.keepOneDashboardOptionSelected,
+                    onChanged = { component.onUpdateSettings(settings.withHistoryCharts(editedType, it)) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun TimingSettingsView(component: SettingsComponent) {
     val state by component.state.collectAsStateWithLifecycle()
     val settings = state.settings
     val strings = LocalStrings.current
 
-    SettingsPageScaffold(title = strings.settings.timing, component = component) {
+    SettingsPageScaffold(title = strings.settings.timing) {
         Section(strings.settings.timing) {
             ChoiceRow(
                 title = strings.settings.packetTimeout,
@@ -457,7 +598,7 @@ private fun LanguageSettingsView(component: SettingsComponent) {
     val settings = state.settings
     val strings = LocalStrings.current
 
-    SettingsPageScaffold(title = strings.settings.language, component = component) {
+    SettingsPageScaffold(title = strings.settings.language) {
         Section(strings.settings.language) {
             ChoiceRow(
                 title = strings.settings.language,
@@ -480,7 +621,7 @@ private fun SourcesSettingsView(component: SettingsComponent) {
     var editedType by rememberSaveable { mutableStateOf(state.selectedEquipmentType) }
     val sources = settings.sensorSources(editedType)
 
-    SettingsPageScaffold(title = strings.settings.dataSources, component = component) {
+    SettingsPageScaffold(title = strings.settings.dataSources) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Section(strings.devices.equipmentType) {
                 ChoiceRow(
@@ -524,7 +665,7 @@ private fun IndoorCyclingSettingsView(component: SettingsComponent) {
     val newPreset = newPresetText.trim().toIntOrNull()
     val canAdd = isNewTargetPowerPresetAllowed(newPreset, presets)
 
-    SettingsPageScaffold(title = strings.settings.indoorCycling, component = component) {
+    SettingsPageScaffold(title = strings.settings.indoorCycling) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Section(strings.settings.targetPowerPresets) {
                 Text(
@@ -585,6 +726,7 @@ private fun IndoorCyclingSettingsView(component: SettingsComponent) {
                     subtitle = strings.settings.targetPowerRestoreDefaultsSubtitle,
                     actionLabel = strings.settings.targetPowerRestoreAction,
                     enabled = presets != DEFAULT_TARGET_POWER_PRESETS,
+                    stacked = true,
                     onClick = {
                         component.onUpdateSettings(settings.copy(targetPowerPresets = DEFAULT_TARGET_POWER_PRESETS))
                     },
@@ -605,13 +747,248 @@ private fun IndoorCyclingSettingsView(component: SettingsComponent) {
     }
 }
 
+/** The settings for steering a treadmill: the switch for it, the quick choices and the step. */
+@Composable
+private fun TreadmillSettingsView(component: SettingsComponent) {
+    val state by component.state.collectAsStateWithLifecycle()
+    val settings = state.settings
+    val strings = LocalStrings.current
+    val locale = strings.locale
+
+    SettingsPageScaffold(title = strings.settings.treadmill) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Section(strings.settings.treadmillControlSection) {
+                SettingsToggleRow(
+                    title = strings.settings.treadmillControl,
+                    subtitle = strings.settings.treadmillControlSubtitle,
+                    checked = settings.treadmillControl,
+                    onCheckedChange = { component.onUpdateSettings(settings.copy(treadmillControl = it)) },
+                )
+                SettingsToggleRow(
+                    title = strings.settings.treadmillConfirmLargeIncrease,
+                    subtitle = strings.settings.treadmillConfirmLargeIncreaseSubtitle(
+                        formatTreadmillValue(TreadmillSetting.SPEED, LARGE_SPEED_INCREASE, locale, compact = true),
+                    ),
+                    checked = settings.treadmillConfirmLargeIncrease,
+                    onCheckedChange = { component.onUpdateSettings(settings.copy(treadmillConfirmLargeIncrease = it)) },
+                )
+            }
+            Section(strings.settings.treadmillRampSection) {
+                ChoiceRow(
+                    title = strings.settings.treadmillRamp,
+                    selected = settings.treadmillRamp,
+                    options = TreadmillRampProfile.entries,
+                    label = {
+                        when (it) {
+                            TreadmillRampProfile.DIRECT -> strings.settings.treadmillRampDirect
+                            TreadmillRampProfile.GENTLE -> strings.settings.treadmillRampGentle
+                            TreadmillRampProfile.VERY_GENTLE -> strings.settings.treadmillRampVeryGentle
+                        }
+                    },
+                    onSelected = { component.onUpdateSettings(settings.copy(treadmillRamp = it)) },
+                )
+                Text(
+                    strings.settings.treadmillRampSubtitle(
+                        formatTreadmillValue(TreadmillSetting.SPEED, TREADMILL_RAMP_MIN_CHANGE, locale),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Section(strings.settings.treadmillFollowSection) {
+                SettingsToggleRow(
+                    title = strings.settings.treadmillFollowWorkout,
+                    subtitle = strings.settings.treadmillFollowWorkoutSubtitle,
+                    checked = settings.treadmillFollowWorkout,
+                    onCheckedChange = { component.onUpdateSettings(settings.copy(treadmillFollowWorkout = it)) },
+                )
+                ChoiceRow(
+                    title = strings.settings.treadmillFollowMode,
+                    selected = settings.treadmillFollowMode,
+                    options = WorkoutTransitionMode.entries,
+                    label = {
+                        when (it) {
+                            WorkoutTransitionMode.OFF -> strings.settings.treadmillFollowModeOff
+                            WorkoutTransitionMode.GENTLE -> strings.settings.treadmillFollowModeGentle
+                            WorkoutTransitionMode.SMART -> strings.settings.treadmillFollowModeSmart
+                        }
+                    },
+                    onSelected = { component.onUpdateSettings(settings.copy(treadmillFollowMode = it)) },
+                )
+                Text(
+                    when (settings.treadmillFollowMode) {
+                        WorkoutTransitionMode.OFF -> strings.settings.treadmillFollowModeOffSubtitle
+                        WorkoutTransitionMode.GENTLE -> strings.settings.treadmillFollowModeGentleSubtitle
+                        WorkoutTransitionMode.SMART -> strings.settings.treadmillFollowModeSmartSubtitle
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (settings.treadmillFollowMode != WorkoutTransitionMode.OFF) {
+                    ChoiceRow(
+                        title = strings.settings.treadmillFollowTransitionSeconds,
+                        selected = settings.treadmillFollowTransitionSeconds,
+                        options = TREADMILL_FOLLOW_TRANSITION_OPTIONS,
+                        label = {
+                            if (it == 0) strings.settings.treadmillFollowTransitionByLevel else strings.settings.treadmillFollowSecondsLabel(it)
+                        },
+                        onSelected = { component.onUpdateSettings(settings.copy(treadmillFollowTransitionSeconds = it)) },
+                    )
+                }
+                if (settings.treadmillFollowMode == WorkoutTransitionMode.SMART) {
+                    ChoiceRow(
+                        title = strings.settings.treadmillFollowShortStep,
+                        selected = settings.treadmillFollowShortStepSeconds,
+                        options = TREADMILL_FOLLOW_SHORT_STEP_OPTIONS,
+                        label = {
+                            if (it == 0) {
+                                strings.settings.treadmillFollowShortStepNone
+                            } else {
+                                strings.settings.treadmillFollowShortStepLabel(formatMinutesSeconds(it))
+                            }
+                        },
+                        onSelected = { component.onUpdateSettings(settings.copy(treadmillFollowShortStepSeconds = it)) },
+                    )
+                }
+                ChoiceRow(
+                    title = strings.settings.treadmillFollowMaxSpeed,
+                    selected = settings.treadmillFollowMaxSpeed,
+                    options = TREADMILL_FOLLOW_MAX_SPEED_OPTIONS,
+                    label = { formatTreadmillValue(TreadmillSetting.SPEED, it, locale, compact = true) },
+                    onSelected = { component.onUpdateSettings(settings.copy(treadmillFollowMaxSpeed = it)) },
+                )
+                SettingsToggleRow(
+                    title = strings.settings.treadmillFollowTone,
+                    subtitle = strings.settings.treadmillFollowToneSubtitle,
+                    checked = settings.treadmillFollowTone,
+                    onCheckedChange = { component.onUpdateSettings(settings.copy(treadmillFollowTone = it)) },
+                )
+            }
+            TreadmillSetting.entries.forEach { setting ->
+                TreadmillPresetSection(
+                    setting = setting,
+                    presets = settings.treadmillPresets(setting),
+                    onChanged = { component.onUpdateSettings(settings.withTreadmillPresets(setting, it)) },
+                )
+            }
+            Section(strings.settings.targetPowerStep) {
+                ChoiceRow(
+                    title = strings.settings.treadmillSpeedStep,
+                    selected = settings.treadmillSpeedStep,
+                    options = TREADMILL_SPEED_STEP_OPTIONS,
+                    label = { formatTreadmillValue(TreadmillSetting.SPEED, it, locale) },
+                    onSelected = { component.onUpdateSettings(settings.copy(treadmillSpeedStep = it)) },
+                )
+                Text(
+                    strings.settings.treadmillSpeedStepSubtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** The quick choices of [setting]: a tap removes one, the field below adds one. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TreadmillPresetSection(
+    setting: TreadmillSetting,
+    presets: List<Int>,
+    onChanged: (List<Int>) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val locale = strings.locale
+    var newPresetText by rememberSaveable(setting) { mutableStateOf("") }
+    val newPreset = parseTreadmillValue(setting, newPresetText)
+    val canAdd = isNewTreadmillPresetAllowed(setting, newPreset, presets)
+    val defaults = setting.defaultPresets
+    val value = { preset: Int -> formatTreadmillValue(setting, preset, locale, compact = true) }
+
+    Section(
+        when (setting) {
+            TreadmillSetting.SPEED -> strings.settings.treadmillSpeedPresets
+            TreadmillSetting.INCLINE -> strings.settings.treadmillInclinePresets
+        },
+    ) {
+        Text(
+            strings.settings.targetPowerPresetsSubtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            presets.forEach { preset ->
+                val removeLabel = strings.settings.treadmillRemovePreset(value(preset))
+                InputChip(
+                    selected = false,
+                    onClick = { onChanged(presets - preset) },
+                    label = { Text("${value(preset)}  ✕") },
+                    modifier = Modifier.semantics { contentDescription = removeLabel },
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedTextField(
+                value = newPresetText,
+                onValueChange = { updated ->
+                    newPresetText = updated.filter { it.isDigit() || it == ',' || it == '.' }.take(5)
+                },
+                label = {
+                    Text(
+                        when (setting) {
+                            TreadmillSetting.SPEED -> strings.settings.treadmillNewSpeedPreset
+                            TreadmillSetting.INCLINE -> strings.settings.treadmillNewInclinePreset
+                        },
+                    )
+                },
+                singleLine = true,
+                isError = newPresetText.isNotBlank() && !canAdd,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(
+                enabled = canAdd,
+                onClick = {
+                    val added = newPreset ?: return@OutlinedButton
+                    onChanged(presets + added)
+                    newPresetText = ""
+                },
+            ) {
+                Text(strings.settings.targetPowerAddPreset)
+            }
+        }
+        Text(
+            strings.settings.treadmillPresetLimits(
+                min = formatTreadmillNumber(setting, setting.presetRange.first, locale, compact = true),
+                max = value(setting.presetRange.last),
+                step = value(setting.presetGrid),
+                maxCount = MAX_TREADMILL_PRESETS,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ActionRow(
+            title = strings.settings.targetPowerRestoreDefaults,
+            subtitle = strings.settings.treadmillRestoreDefaultsSubtitle(defaults.joinToString(", ") { value(it) }),
+            actionLabel = strings.settings.targetPowerRestoreAction,
+            enabled = presets != defaults,
+            stacked = true,
+            onClick = { onChanged(defaults) },
+        )
+    }
+}
+
 @Composable
 private fun DebugSettingsView(component: SettingsComponent) {
     val state by component.state.collectAsStateWithLifecycle()
     val settings = state.settings
     val strings = LocalStrings.current
 
-    SettingsPageScaffold(title = strings.settings.debug, component = component) {
+    SettingsPageScaffold(title = strings.settings.debug) {
         Section(strings.settings.debug) {
             SettingsToggleRow(
                 title = strings.settings.debugLogging,
@@ -635,7 +1012,7 @@ private fun RememberedDevicesSettingsView(component: SettingsComponent) {
     val strings = LocalStrings.current
     var showClearSelectionsConfirm by rememberSaveable { mutableStateOf(false) }
 
-    SettingsPageScaffold(title = strings.settings.rememberedDevices, component = component) {
+    SettingsPageScaffold(title = strings.settings.rememberedDevices) {
         Section(strings.settings.rememberedDevices) {
             StatusRow(
                 strings.settings.ftmsEquipment,
@@ -673,7 +1050,7 @@ private fun RememberedDevicesSettingsView(component: SettingsComponent) {
 private fun OpenSourceSettingsView(component: SettingsComponent) {
     val strings = LocalStrings.current
 
-    SettingsPageScaffold(title = strings.settings.openSource, component = component) {
+    SettingsPageScaffold(title = strings.settings.openSource) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Section(strings.settings.openSourceLibraries) {
                 openSourceLibraries.forEachIndexed { index, library ->
@@ -790,6 +1167,74 @@ private fun <T> MultiChoiceRow(
                         onSelected(updated)
                     },
                     label = { Text(label(option)) },
+                )
+            }
+        }
+        if (selected.size <= 1) {
+            Text(
+                minimumSelectionText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * A choice of several of [options] in an order of the user's own: the chosen ones first, in their
+ * order and with arrows to move them, then the others in the order of [options]. Ticking one adds
+ * it at the end of the chosen ones. The last chosen one cannot be unticked.
+ */
+@Composable
+private fun <T> OrderedChoiceList(
+    selected: List<T>,
+    options: List<T>,
+    label: (T) -> String,
+    minimumSelectionText: String,
+    onChanged: (List<T>) -> Unit,
+) {
+    val strings = LocalStrings.current
+    Column {
+        selected.forEachIndexed { index, option ->
+            val name = label(option)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .toggleable(
+                            value = true,
+                            enabled = selected.size > 1,
+                            role = Role.Checkbox,
+                            onValueChange = { onChanged(selected - option) },
+                        )
+                        .padding(vertical = 4.dp),
+                ) {
+                    Checkbox(checked = true, onCheckedChange = null, enabled = selected.size > 1)
+                    Text(name, modifier = Modifier.padding(start = 12.dp))
+                }
+                IconButton(enabled = index > 0, onClick = { onChanged(movedBy(selected, index, -1)) }) {
+                    Icon(BridgeUiIcons.ArrowUp, contentDescription = strings.settings.moveUp(name))
+                }
+                IconButton(enabled = index < selected.lastIndex, onClick = { onChanged(movedBy(selected, index, 1)) }) {
+                    Icon(BridgeUiIcons.ArrowDown, contentDescription = strings.settings.moveDown(name))
+                }
+            }
+        }
+        options.filter { it !in selected }.forEach { option ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .toggleable(value = false, role = Role.Checkbox, onValueChange = { onChanged(selected + option) })
+                    .padding(vertical = 4.dp),
+            ) {
+                Checkbox(checked = false, onCheckedChange = null)
+                Text(
+                    label(option),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp),
                 )
             }
         }

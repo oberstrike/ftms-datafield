@@ -161,10 +161,32 @@ class SqlDelightSessionHistoryRepository(
         queries.selectLatestSession().executeAsOneOrNull()?.toRecord()
     }
 
-    override suspend fun deleteSession(sessionId: String) = withContext(databaseContext) {
+    override suspend fun sessionAverages(sessionIds: Collection<String>): Map<String, SessionAverages> =
+        withContext(databaseContext) {
+            val found = sessionIds
+                .distinct()
+                // Below the number of parameters SQLite takes in one statement.
+                .chunked(SESSION_AVERAGES_CHUNK)
+                .flatMap { chunk -> queries.selectSessionAverages(chunk).executeAsList() }
+                .associate { row ->
+                    row.session_id to SessionAverages(
+                        recordedMillis = row.last_offset_millis,
+                        powerW = row.average_power_w,
+                        heartRateBpm = row.average_heart_rate_bpm,
+                        cadence = row.average_cadence,
+                    )
+                }
+            sessionIds.associateWith { found[it] ?: SessionAverages() }
+        }
+
+    override suspend fun deleteSession(sessionId: String) = deleteSessions(listOf(sessionId))
+
+    override suspend fun deleteSessions(sessionIds: Collection<String>) = withContext(databaseContext) {
         queries.transaction {
-            queries.deleteSession(sessionId)
-            queries.deleteSessionRow(sessionId)
+            sessionIds.forEach { sessionId ->
+                queries.deleteSession(sessionId)
+                queries.deleteSessionRow(sessionId)
+            }
         }
         Unit
     }
@@ -312,3 +334,5 @@ class SqlDelightSessionHistoryRepository(
     private fun newSessionId(startedAtMillis: Long): String =
         "session-$startedAtMillis-${Random.nextInt().toUInt().toString(16)}"
 }
+
+private const val SESSION_AVERAGES_CHUNK = 500

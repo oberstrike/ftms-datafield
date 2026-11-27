@@ -7,6 +7,7 @@ import de.ma.ftms.bridge.runtime.DashboardChartTimespan
 import de.ma.ftms.bridge.runtime.DashboardMetricKey
 import de.ma.ftms.bridge.runtime.EquipmentType
 import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.ValueSource
 import de.ma.ftms.core.SmoothedTreadmillSample
 import kotlin.math.floor
 
@@ -134,6 +135,59 @@ internal fun deliveredSourcedMetrics(samples: List<SmoothedTreadmillSample>): Se
         samples.any { sourceValue(metric, it.raw.equipment) != null || sourceValue(metric, it.raw.watch) != null }
     }
 
+/** The value with a source to choose that the chart of this key shows, or null if it has one source only. */
+internal fun DashboardMetricKey.sourcedMetric(): SourcedMetric? =
+    when (this) {
+        DashboardMetricKey.POWER -> SourcedMetric.POWER
+        DashboardMetricKey.HEART_RATE -> SourcedMetric.HEART_RATE
+        DashboardMetricKey.CADENCE_STEP -> SourcedMetric.CADENCE
+        else -> null
+    }
+
+/** The source that is not this one. */
+internal fun ValueSource.other(): ValueSource =
+    if (this == ValueSource.EQUIPMENT) ValueSource.WATCH else ValueSource.EQUIPMENT
+
+/**
+ * The lines of a chart for a value that the equipment and the watch can both deliver: the values of
+ * the chosen source and, if the other source delivered any, those next to them. Each line then
+ * carries the name of its source; a line on its own carries [title]. Empty if [chosen] is no line.
+ */
+internal fun sourceChartLines(
+    title: String,
+    chosen: List<ChartPoint>,
+    other: List<ChartPoint>,
+    chosenLabel: String,
+    otherLabel: String,
+): List<ChartLine> =
+    when {
+        chosen.size < 2 -> emptyList()
+        other.size < 2 -> listOf(ChartLine(title, chosen, ChartLineRole.CHOSEN_SOURCE))
+        else -> listOf(
+            ChartLine(chosenLabel, chosen, ChartLineRole.CHOSEN_SOURCE),
+            ChartLine(otherLabel, other, ChartLineRole.OTHER_SOURCE),
+        )
+    }
+
+/**
+ * The same for a recorded session. [recorded] is the value the session went with. If the source
+ * that is chosen now delivered nothing in that session, the chart shows [recorded] alone: the other
+ * source is then what was recorded, and drawing it twice would say nothing.
+ */
+internal fun historySourceChartLines(
+    title: String,
+    recorded: List<ChartPoint>,
+    chosen: List<ChartPoint>,
+    other: List<ChartPoint>,
+    chosenLabel: String,
+    otherLabel: String,
+): List<ChartLine> =
+    if (chosen.size < 2) {
+        sourceChartLines(title, recorded, emptyList(), chosenLabel, otherLabel)
+    } else {
+        sourceChartLines(title, chosen, other, chosenLabel, otherLabel)
+    }
+
 /** How the chart of this value writes its numbers. */
 internal fun DashboardMetricKey.chartFormat(strings: Strings): ChartValueFormat =
     when (this) {
@@ -182,10 +236,14 @@ private fun formatPace(speedKmh: Double): String {
     if (speedKmh <= 0.0) {
         return "--"
     }
-    val secondsPerKm = 3600.0 / speedKmh
+    return "${formatPaceClock(3600.0 / speedKmh)} min/km"
+}
+
+/** A pace as minutes and seconds per kilometre, as in "6:31". */
+internal fun formatPaceClock(secondsPerKm: Double): String {
     val minutes = floor(secondsPerKm / 60.0).toInt()
     val seconds = (secondsPerKm - minutes * 60).toInt().coerceIn(0, 59)
-    return formatNeutral("%d:%02d min/km", minutes, seconds)
+    return formatNeutral("%d:%02d", minutes, seconds)
 }
 
 internal fun formatAveragePace(distanceM: Double, durationMillis: Long): String? {
@@ -193,11 +251,15 @@ internal fun formatAveragePace(distanceM: Double, durationMillis: Long): String?
         return null
     }
 
-    val secondsPerKm = durationMillis.toDouble() / 1000.0 / (distanceM / 1000.0)
-    val minutes = floor(secondsPerKm / 60.0).toInt()
-    val seconds = (secondsPerKm - minutes * 60).toInt().coerceIn(0, 59)
-    return formatNeutral("%d:%02d min/km", minutes, seconds)
+    return "${formatPaceClock(averagePaceSecondsPerKm(distanceM, durationMillis))} min/km"
 }
+
+private fun averagePaceSecondsPerKm(distanceM: Double, durationMillis: Long): Double =
+    durationMillis.toDouble() / 1000.0 / (distanceM / 1000.0)
+
+/** The average pace over [distanceM] in [durationMillis] as in "6:31", null before there is one. */
+internal fun formatAveragePaceClock(distanceM: Double, durationMillis: Long): String? =
+    if (distanceM <= 0.0 || durationMillis <= 0L) null else formatPaceClock(averagePaceSecondsPerKm(distanceM, durationMillis))
 
 internal fun averageInclinePct(samples: List<SmoothedTreadmillSample>): Double? {
     if (samples.isEmpty()) {

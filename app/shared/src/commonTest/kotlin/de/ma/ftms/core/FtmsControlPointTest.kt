@@ -80,4 +80,62 @@ class FtmsControlPointTest {
         assertEquals(155, range.nearest(150))
         assertEquals(133, FtmsPowerRange(minWatts = 0, maxWatts = 400, stepWatts = 1).nearest(133))
     }
+
+    @Test
+    fun encodesTargetSpeedAsHundredthsOfKmh() {
+        // 4.00 km/h and 0.80 km/h, as the Darwin TM 70 took them.
+        assertContentEquals(hex("02 90 01"), FtmsControlPoint.setTargetSpeed(400))
+        assertContentEquals(hex("02 50 00"), FtmsControlPoint.setTargetSpeed(80))
+        assertContentEquals(hex("02 00 00"), FtmsControlPoint.setTargetSpeed(-5))
+    }
+
+    @Test
+    fun encodesTargetInclinationAsSignedTenthsOfPercent() {
+        assertContentEquals(hex("03 0A 00"), FtmsControlPoint.setTargetInclination(10))
+        assertContentEquals(hex("03 00 00"), FtmsControlPoint.setTargetInclination(0))
+        assertContentEquals(hex("03 F6 FF"), FtmsControlPoint.setTargetInclination(-10))
+    }
+
+    @Test
+    fun readsWhichTargetsTheEquipmentTakes() {
+        // The Darwin TM 70: speed and inclination, nothing else.
+        assertEquals(
+            FtmsTargetSettings(speed = true, inclination = true),
+            FtmsTargetSettings.parse(hex("5C 16 00 00 03 00 00 00")),
+        )
+        assertEquals(
+            FtmsTargetSettings(speed = false, inclination = false),
+            FtmsTargetSettings.parse(hex("5C 16 00 00 08 00 00 00")),
+        )
+        assertEquals(
+            FtmsTargetSettings(speed = true, inclination = false),
+            FtmsTargetSettings.parse(hex("00 00 00 00 01 00 00 00")),
+        )
+        assertNull(FtmsTargetSettings.parse(hex("5C 16 00 00")))
+    }
+
+    @Test
+    fun readsTheSpeedAndInclinationRanges() {
+        // The Darwin TM 70: 0.80 to 18.00 km/h in 0.10 steps, 0 to 15.0 % in 1.0 steps.
+        assertEquals(FtmsValueRange(min = 80, max = 1800, step = 10), FtmsValueRange.parseSpeed(hex("50 00 08 07 0A 00")))
+        assertEquals(FtmsValueRange(min = 0, max = 150, step = 10), FtmsValueRange.parseInclination(hex("00 00 96 00 0A 00")))
+        // A decline is negative only for the inclination; a speed range has no sign.
+        assertEquals(FtmsValueRange(min = -30, max = 150, step = 5), FtmsValueRange.parseInclination(hex("E2 FF 96 00 05 00")))
+        assertEquals(FtmsValueRange(min = 0, max = 0xFFE2, step = 1), FtmsValueRange.parseSpeed(hex("00 00 E2 FF 00 00")))
+        assertNull(FtmsValueRange.parseSpeed(hex("50 00 08")))
+        assertNull(FtmsValueRange.parseSpeed(hex("08 07 50 00 0A 00")))
+    }
+
+    @Test
+    fun snapsAValueToTheRangeAndItsSteps() {
+        val speed = FtmsValueRange(min = 80, max = 1800, step = 10)
+
+        assertEquals(850, speed.nearest(850))
+        assertEquals(850, speed.nearest(854))
+        assertEquals(860, speed.nearest(855))
+        assertEquals(80, speed.nearest(0))
+        assertEquals(1800, speed.nearest(2500))
+        // The top of a range that does not end on a step stays within the range.
+        assertEquals(140, FtmsValueRange(min = 0, max = 145, step = 10).nearest(145))
+    }
 }

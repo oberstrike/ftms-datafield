@@ -49,6 +49,8 @@ You need both the Android app and the Garmin Connect IQ data field on the watch.
 
 The app stores sessions locally and shows history, charts, and diagnostic logs. The watch records received values as Connect IQ FIT developer fields.
 
+The app has four tabs: `Dashboard`, `History`, `Devices` and `Settings`. The dashboard has no title bar, so its room goes to the values. The settings list their pages under the headings `Bridge`, `Display`, `Diagnostics` and `About`; a page names itself in the title bar and leads back with the arrow next to it. The logs are a page under `Settings > Logs`. The back button first closes what is open in a tab (a settings page, a session of the history), then leads to the dashboard, and leaves the app from there.
+
 ### Equipment type
 
 On the `Devices` tab you choose what the selected equipment is: `Treadmill`, `Indoor cycling` or `Cross trainer`. Equipment that names its type while advertising is preselected when you pick it; you can change the choice while the bridge is stopped.
@@ -59,9 +61,21 @@ On the `Devices` tab you choose what the selected equipment is: `Treadmill`, `In
 - Only what belongs to the type is offered and shown: no pace on a bike, no resistance on a treadmill, and the cadence is called `Step rate` (spm) on a treadmill and `Cadence` (rpm) otherwise.
 - During a session the dashboard leaves out what the equipment and the watch have not delivered so far: no tile, no chart and no row under `Sources` for a heart rate that nobody measures. It appears as soon as the first value arrives.
 - Each chart has a value axis on round numbers, the time since the start of the session below it, and the latest value above it, with average and maximum where they say something. Rest a finger on a chart to read the value at that time. The distance is a live value only: as a chart it would be a line that just rises.
-- Each session is stored with its type. The history shows the type, leaves out values that do not apply to it, and can be filtered by type once more than one type is stored. Sessions from before this version get their type from the data they contain.
+- Each session is stored with its type. The history shows the type, leaves out values that do not apply to it, and can be filtered by type once more than one type is stored (see [History](#history)). Sessions from before this version get their type from the data they contain.
 - The treadmill power estimate is applied to treadmills only.
 - If the equipment sends another type of data than the one selected, the dashboard says so.
+
+### History
+
+The `History` tab lists the stored sessions by month, the latest first.
+
+- At the top are the sums: number of sessions, distance, duration and, where equipment can climb, the ascent. `Week`, `Month`, `Year` and `All time` choose whether they cover the running week, the running month, the running year or all sessions. The week begins on the day it begins with in the phone's region.
+- Each month names in its heading what its sessions add up to. A row shows day and time, the three most telling values of the equipment type (treadmill: distance, duration, average pace; indoor bike: duration, average power, distance; cross trainer: distance, duration, average speed) and the average heart rate if one was recorded. A session that did not end the regular way is marked `interrupted`.
+- A tap on a row opens the session on one page: its figures at the top, then the charts, then `All values`, the comparison `Equipment and watch` and the `Technical details` (status, equipment, watch, packets, sends, last error). The three sections fold; the technical details start folded.
+- The charts of a session all span the whole session and show the average while untouched. Put a finger on one of them and all of them show their value at that time.
+- Which charts a session shows, and in which order, is set per equipment type under `Settings > History`: tick, untick and move them with the arrows. A chart a session has no values for is left out there.
+- Press and hold a row to mark the session; after that a tap marks further ones or takes a mark away. The title bar counts the marked sessions, and its menu offers `Delete session` or `Delete sessions` and asks before deleting. The cross at the top left or the back key clears the marks; they also end when you change the filter or leave the tab. A session that is still recording cannot be marked.
+- Without marks, the menu at the top right clears the whole history in the list, and deletes the session in a session. The arrow at the top left or the back key leads back to the list.
 
 ### Target power for an indoor bike
 
@@ -83,6 +97,68 @@ The bike must offer the FTMS Control Point with "Set Target Power". If it does n
 
 The bike holds the target by its own measurement. If you show the power of pedals instead (see below), that value can differ from the target by a few percent; the app does not correct the target for it.
 
+### Speed and incline of a treadmill
+
+A treadmill is only read unless you say otherwise. With `Settings > Treadmill > Steer the treadmill from the app` (off by default) the dashboard shows the card `Treadmill control` for the type `Treadmill`:
+
+- The card goes with the treadmill, not with a session: it is there as soon as the app is connected to the treadmill and the treadmill takes such values, and its keys work as soon as the belt moves. So that this works without a session too, the app connects to the selected treadmill while it is open. At the end of a session the card is gone for a few seconds, until that connection is back.
+- It shows speed and incline as the treadmill reports them, and next to them the target while the belt is still on its way there.
+- The speed has two pairs of keys: the smallest step the treadmill takes (mostly 0.1 km/h) and the large step from the settings (0.5 or 1 km/h). The incline changes by the treadmill's step.
+- Tap a preset to set speed or incline directly. If a preset makes the belt faster by more than 3 km/h, the app asks first; this can be switched off in the settings. A preset outside of what the treadmill takes is greyed out.
+- If the new speed is more than 0.5 km/h away, the app leads the belt there in small steps instead of sending only the target (`Settings > Treadmill > Transition`, default `Gentle`): the pace of the change builds up, holds and fades out before the target, and slowing down is brisker than speeding up. `Gentle` changes at most 0.4 km/h per second upwards and 0.6 downwards (from 6 to 9.2 km/h in about 10 seconds), `Very gentle` 0.25 and 0.4. With `Direct` the treadmill goes to the target at its own pace. Meanwhile the card shows `Easing to …`.
+- Under `Settings > Treadmill` you add and remove the presets: up to 8 each, for the speed from 0.5 to 25 km/h in steps of 0.1 km/h (default 6, 8, 10 and 12 km/h), for the incline from 0 to 40 % in steps of 0.5 % (default 0, 1, 2 and 5 %).
+
+A belt carries a person, so the rules are stricter here than for the target power of a bike:
+
+- The app never starts or stops the belt. It sends no speed below 0.5 km/h, and while the belt stands the keys are locked. Starting and stopping is done on the console.
+- The app only sends what you tap: nothing on connecting, nothing after a lost connection, nothing when a pause ends, and no value a second time. The values of a transition all belong to the one tap that started it. The only exception is one you switch on yourself: following a workout on the watch (see below).
+- A transition never runs ahead of the belt: if the treadmill reports a speed more than 0.6 km/h behind the value last sent, the app waits. If the belt does not follow for 10 seconds, is moved on the console, or the treadmill is silent for more than 5 seconds, the app gives the transition up and does not pick it up again.
+- The app forgets what you last set as soon as the connection ends, the belt stops, the treadmill refuses the value or does not answer, or the belt reached the value and left it again (someone used the console). The keys then start from what the treadmill reports.
+- If the treadmill reports no speed for more than 5 seconds, the app sends nothing.
+
+The treadmill has to offer the FTMS Control Point with "Set Target Speed" or "Set Target Inclination"; what it does not offer is missing on the card, and without both the card does not appear. Tested with a Darwin TM 70 (FitShow module), so far with single commands from a computer and in the app, transitions included, against a simulated treadmill.
+
+### Following the workout on the watch
+
+While a workout with pace targets runs on the watch, the app can set the speed of the treadmill to it step by step (`Settings > Treadmill > Follow the watch's workout`, off by default). For that the data field tells the app which step the watch is in and which one follows. The watch stays the source: its step display, the lap key and the result in Garmin Connect do not change.
+
+- It needs a running session, the treadmill control (above) and a belt that moves. You still start and stop the belt on the console.
+- The app sends once when the watch begins a step with a pace: the middle of the pace range (6:30–6:32 min/km gives 9.2 km/h). If the belt already runs that fast, it sends nothing. A step without a pace leaves the belt alone.
+- Between steps it sends nothing: what you set by hand or on the console stays until the next step.
+- It never asks for more than the maximum speed in the settings (default 12 km/h), sends nothing while the activity on the watch is not recording, and a short tone on the phone announces that the belt gets faster (can be switched off).
+- The card `Treadmill control` shows what applies and what comes: `Following the watch's workout: now 6.0 km/h · in 0:42 9.2 km/h`.
+- A watch does not tell an app how much of a step is left. The data field therefore sends how long the step has lasted by the watch's activity timer, and repeats that every 10 seconds; the app counts on in between. So the remaining time is right even if the app joins in the middle of a step or a message is lost. With an older data field the app counts from the message that announced the step and is off by however late that came. A step that ends with the lap key has no remaining time.
+
+`Transition between steps` decides how the belt gets from one pace to the next:
+
+- `Off`: no acceleration of the app's own. The app sends the pace when the step begins, and the treadmill speeds up and slows down the way it does by itself.
+- `Gentle`: every change begins with its step and is led gently, as described above.
+- `Smart` (default): gentle where there is time for it, direct where the step the change falls into is short (adjustable, default below 1:00 min). Before a faster step the belt speeds up early enough to be at pace when the step begins; it takes at most half of the running step for that. It slows down only once the slower step has begun. Only a step that follows a step of fixed length can be prepared, not one after the lap key.
+- `Length of a gentle change`: `As above` takes the pace from `Transition`; with 5 to 30 seconds every gentle change takes about that long, however large it is. That does not make it faster than the treadmill itself.
+
+Not yet tried on a watch: Garmin does not describe in which units a watch reports the pace and the length of a step. The app reads them the way other developers have observed them (metres per second, seconds) and discards what does not fit. Leave following off for the first workout: the card then still shows `Workout on the watch (not followed): now … · in … …`, and you see whether pace and remaining time match what the watch displays.
+
+### Workout view
+
+While the watch is in a workout there is a view of its own in landscape, meant for the phone on the shelf of the treadmill: large, dark and readable in motion.
+
+- On the left the step the watch is in: a ring that fills as the step passes, with the remaining time and the pace the step asks for inside. A run is yellow-green, a recovery blue. A step without a fixed length has a dashed ring and counts up; if it ends with the lap key, it says so. While the activity on the watch is paused, the time stands still and `Paused` stands above it.
+- Below it the step that follows, with its length and pace. If the belt already speeds up before that step begins (transition `Smart`), the card is highlighted and says `Belt already speeds up for`.
+- On the right four values. A tap on one opens the choice of what the field shows: speed, pace, average pace, heart rate, distance, elapsed time, incline, ascent, step rate or power. If you choose a value that another field already shows, the two change places. The choice is kept.
+- When the watch starts the session (see `Starting and stopping with the watch`), the app switches to this view at once and turns the screen to landscape for it, even with rotation locked. While no workout runs on the watch yet, the ring shows the time of the session (`Free run`); with the first step of a workout it changes to that step's remaining time. If the app was not in the foreground at the start, the view is there as soon as you open it.
+- In a session you start in the app, the view comes by itself as soon as the watch is in a workout and the phone lies on its side.
+- The `X` at the top left leads back to the dashboard. After that it stays closed for this session until you open it again from the card at the top of the dashboard (`Workout on the watch is running` or `Workout view`); a workout on the watch also brings it back once the phone has been upright and lies on its side again.
+- With `Settings > Treadmill > Steer the treadmill from the app` switched on and a treadmill that takes commands, you set the belt from here too:
+  - At the bottom left and right of the ring are `−` and `+` for the speed. A tap is the treadmill's smallest step (usually 0.1 km/h).
+  - If one of the four fields shows the incline, it has an arrow up and an arrow down on its right. A tap is the treadmill's smallest step. While the treadmill is still on its way, the incline that was asked for stands between the arrows.
+  - A key that is held goes on stepping by itself after just under half a second, and the steps add up: about 0.7 km/h per second for the speed, one step every 0.4 seconds for the incline. One hold makes the belt faster by 3 km/h at most; for more, let go and press again. Slower is not limited.
+  - A speed set by hand stands in the ring as `by hand` in the place of `Target`. It holds until the next step of the workout; if the app follows the workout, it then sets that step's pace again.
+  - While the belt stands, the keys are pale and do nothing: starting and stopping is done on the console.
+- The view needs a running session with a treadmill, but neither the treadmill control nor following: whoever operates the belt by hand still sees the step and the remaining time. Without the control it has no keys for the belt.
+- The system bars are hidden and come back with a swipe from the edge. The font size of the system does not change the view, because it already uses the whole screen.
+
+Where the steps come from, and what about them has not been tried on a watch yet, is in the section before. The digits are set in Barlow Condensed (SIL Open Font License, see `app/androidApp/licenses/BarlowCondensed-OFL.txt`).
+
 ### Values from the watch
 
 The watch sends its heart rate to the phone, and with it the power and cadence it has for the running activity. That includes sensors paired with the watch, such as a chest strap or power meter pedals. The app does not connect to these sensors itself.
@@ -91,7 +167,8 @@ The watch sends its heart rate to the phone, and with it the power and cadence i
 - The default is heart rate from the watch, power and cadence from the equipment.
 - The chosen value is used for the display, the history and the values sent to the watch.
 - If the chosen source delivers nothing for 5 seconds, the value stays empty; the heart rate of the watch stays for 15 seconds, because it changes slowly and the watch's messages can take seconds to arrive. The app does not switch to the other source by itself.
-- Both values are stored with the session. For a session that contains both, the history shows the average of each, the difference, and a chart with both lines.
+- Both values are stored with the session. For a session that contains both, the history shows the average of each and the difference.
+- The charts of heart rate, power and cadence show both sources, on the dashboard and in the history: the chosen source in black (white on a dark screen), the other one in red and a little thinner, each named in the legend. Behind the average of the chosen source, that of the other one stands in brackets and in red, as in `avg 148 (150) spm`; a session lists these averages the same way under `All values`. In the history the chosen source is the one chosen now for that equipment type.
 - The treadmill power estimate counts as a value of the equipment.
 - The watch values are shown while the equipment sends data.
 
@@ -121,6 +198,20 @@ The relay is `tools/footPodRelay/foot_pod_relay.py`. It needs Linux with BlueZ a
 4. Start the activity on the watch. The session starts (see "Starting and stopping with the watch"), the phone offers its sensor, the relay passes it on.
 
 Tested with a Forerunner 970 (firmware 19.23) and BlueZ 5.82. On the first attempt the watch's firmware crashed eight seconds after the sensor was added while measurements were already flowing; later attempts, with the watch connecting before the session started, ran without a problem. The cause is not known.
+
+#### With a relay on a second phone
+
+The same relay as an Android app, for a spare phone that stays near the treadmill: FTMS Relay (`app/relayApp`).
+
+    treadmill --FTMS--> phone (bridge app) --foot pod--> second phone (FTMS Relay) --foot pod--> watch
+
+1. Install `relayApp-debug.apk` on the second phone, open it, tap `Start relay` and allow "Nearby devices". The second phone must not be one the watch is paired with.
+2. Tap `Allow running in the background` if the app offers it. On phones that decide themselves which apps may launch (Honor, Huawei, Xiaomi), also allow the app to launch automatically in the system settings; otherwise the relay does not come back after a restart of the phone, and you have to open the app once.
+3. Continue with steps 2 to 4 above; on the watch, pick the second phone as the foot pod.
+
+The app shows whether it has found the bridge's phone, whether a watch receives the measurements and how many went through. It finds the bridge's sensor by the model that sensor reports, so other foot pods in range, such as a chest strap, are left alone. Its events are written to `files/logs/relay.log` in the app's data directory.
+
+Tested with an Honor 70 (Android 14) and a computer that played the bridge and the watch: every measurement arrived unchanged, about 60 ms later. A Forerunner 970 found the phone as a foot pod and bonded with it when the sensor was added (Android may ask on the second phone to confirm the pairing). An Android phone is visible under a random Bluetooth address that is a new one each time the relay starts; the bonded watch found it again under a new address. A complete training through the second phone is still to be done.
 
 #### Without a relay: sensor instead of the data field
 
@@ -153,7 +244,8 @@ With `Settings > Bridge behavior > Follow the activity on the watch` (on by defa
 - Saving or discarding the activity ends the session.
 - The app has to be open on the phone when the activity starts, with treadmill and watch selected, unless it waits in the background (see below). The watch needs the data field from this version; an older data field does not report the activity.
 - Without a phone session the data field connects to the treadmill itself. When the session starts, it hands the connection over to the phone and shows `PWAIT` until the phone has data, which can take a few seconds.
-- `Start`, `Pause` and `Stop` in the app keep working. What you do there stays until the state of the activity on the watch changes again.
+- A session that the watch started is led by the watch: the app shows no `Pause` and `Stop` for it, neither in the app nor in its notification, and you pause and end it on the watch. If the app has not heard from the watch for 20 seconds, the buttons come back, so a session can still be ended when the watch is out of reach.
+- For a session you started in the app, `Pause` and `Stop` in the app keep working. What you do there stays until the state of the activity on the watch changes again.
 - A session that already runs when the activity starts simply continues. For a session that covers exactly the activity, leave `Auto start` off and let the watch start it.
 
 #### Waiting in the background
@@ -243,7 +335,7 @@ The data field does not overwrite Garmin native distance, speed, power, or eleva
 
 - Start the watch activity before starting the bridge.
 - Confirm the Android app shows the treadmill as connected.
-- Check the Logs screen in the Android app.
+- Check `Settings > Logs` in the Android app.
 - Stop and restart the bridge after disconnecting other BLE apps from the treadmill.
 
 ### Distance or cadence looks wrong
@@ -274,13 +366,17 @@ Run Android/shared checks:
 ./gradlew :app:shared:jvmTest \
   :app:androidApp:testDebugUnitTest \
   :app:androidApp:lintDebug \
-  :app:androidApp:assembleDebug
+  :app:androidApp:assembleDebug \
+  :app:relayApp:testDebugUnitTest \
+  :app:relayApp:lintDebug \
+  :app:relayApp:assembleDebug
 ```
 
-The debug APK is written to:
+The debug APKs are written to:
 
 ```text
 app/androidApp/build/outputs/apk/debug/androidApp-debug.apk
+app/relayApp/build/outputs/apk/debug/relayApp-debug.apk
 ```
 
 ## Build The Garmin Data Field
@@ -324,6 +420,7 @@ More IntelliJ and Garmin SDK notes are in [INTELLIJ.md](INTELLIJ.md).
 ```text
 app/androidApp/       Android bridge app
 app/garminDataField/  Garmin Connect IQ data field
+app/relayApp/         Android relay app that passes the running sensor on from a second phone
 app/shared/           Kotlin Multiplatform FTMS parser, smoothing, storage models
 docs/                 Connect IQ Store submission docs and assets
 tools/ftmsProbe/      Linux FTMS validation probe

@@ -11,6 +11,7 @@ interface Strings {
     val logs: LogsStrings
     val settings: SettingsStrings
     val notification: NotificationStrings
+    val workout: WorkoutScreenStrings
 }
 
 interface CommonStrings {
@@ -62,7 +63,6 @@ interface NavigationStrings {
     val dashboard: String
     val history: String
     val devices: String
-    val logs: String
     val settings: String
 }
 
@@ -71,6 +71,7 @@ interface DashboardStrings {
     val bridgeRunning: String
     val bridgePaused: String
     val bridgeIdle: String
+    val watchLedSession: String
     val noFtmsEquipmentSelected: String
     val noGarminWatchSelected: String
     val autoStartWaiting: String
@@ -132,7 +133,30 @@ interface DashboardStrings {
     fun targetPowerInputRange(minWatts: Int, maxWatts: Int, stepWatts: Int): String
     fun targetPowerDecrease(watts: Int): String
     fun targetPowerIncrease(watts: Int): String
+    val treadmillControl: String
+    fun treadmillTarget(value: String): String
+    val treadmillBeltStopped: String
+    val treadmillSending: String
+    fun treadmillRamping(target: String): String
+    val treadmillFollowing: String
+    val treadmillWatchWorkout: String
+    fun treadmillFollowNow(speed: String): String
+    val treadmillFollowNowFree: String
+    fun treadmillFollowNext(time: String, speed: String): String
+    val treadmillRejected: String
+    val treadmillFailed: String
+    fun treadmillAccepts(ranges: List<String>): String
+    fun treadmillSpeedDecrease(amount: String): String
+    fun treadmillSpeedIncrease(amount: String): String
+    fun treadmillInclineDecrease(amount: String): String
+    fun treadmillInclineIncrease(amount: String): String
+    fun treadmillConfirmTitle(target: String): String
+    fun treadmillConfirmText(current: String): String
+    val treadmillConfirmAction: String
+    val treadmillNoPresets: String
     fun chartStats(average: String, max: String): String
+    fun chartAverage(average: String): String
+    fun chartMax(max: String): String
     val noDeliveredValues: String
     val waitingForData: String
     fun chartSummary(title: String, latest: String, min: String, max: String, start: String, end: String): String
@@ -171,27 +195,41 @@ interface DevicesStrings {
 
 interface HistoryStrings {
     val title: String
+    val periodWeek: String
+    val periodMonth: String
+    val periodYear: String
     val allTime: String
     val totalSessions: String
-    val storedSessions: String
     val noSessionsStored: String
+    val moreOptions: String
+    val clearHistory: String
     val clearHistoryTitle: String
     val clearHistoryText: String
+    val deleteSession: String
     val deleteSessionTitle: String
     val deleteSessionText: String
+    val deleteSessions: String
+    fun deleteSessionsTitle(count: Int): String
+    val deleteSessionsText: String
+    val markSession: String
+    val clearMarks: String
+    fun markedSessions(count: Int): String
     val noGraphSamplesStored: String
     val notEnoughSamples: String
-    val chartSpeed: String
-    val chartIncline: String
-    val chartAscent: String
-    val chartPower: String
-    val chartHeartRate: String
-    val chartResistance: String
-    val viewMetrics: String
-    val viewCharts: String
     val filterAll: String
+    val statusRunning: String
+    val statusInterrupted: String
+    val statusStopped: String
+    val sectionAllValues: String
     val sourceComparison: String
-    fun savedSessions(count: Int): String
+    val sectionTechnical: String
+    val expand: String
+    val collapse: String
+
+    /** Patterns of [java.text.SimpleDateFormat]: a session in the list, a session on its own, a month. */
+    val sessionDayPattern: String
+    val sessionDatePattern: String
+    val monthPattern: String
 }
 
 interface LogsStrings {
@@ -240,8 +278,56 @@ interface SettingsStrings {
     val targetPowerRestoreAction: String
     fun targetPowerPresetLimits(minWatts: Int, maxWatts: Int, maxCount: Int): String
     fun targetPowerRemovePreset(watts: Int): String
+    val treadmill: String
+    val treadmillSubtitle: String
+    val treadmillControlSection: String
+    val treadmillControl: String
+    val treadmillControlSubtitle: String
+    val treadmillConfirmLargeIncrease: String
+    fun treadmillConfirmLargeIncreaseSubtitle(threshold: String): String
+    val treadmillSpeedPresets: String
+    val treadmillInclinePresets: String
+    val treadmillNewSpeedPreset: String
+    val treadmillNewInclinePreset: String
+    fun treadmillPresetLimits(min: String, max: String, step: String, maxCount: Int): String
+    fun treadmillRestoreDefaultsSubtitle(values: String): String
+    fun treadmillRemovePreset(value: String): String
+    val treadmillRampSection: String
+    val treadmillRamp: String
+    fun treadmillRampSubtitle(minChange: String): String
+    val treadmillRampDirect: String
+    val treadmillRampGentle: String
+    val treadmillRampVeryGentle: String
+    val treadmillFollowSection: String
+    val treadmillFollowWorkout: String
+    val treadmillFollowWorkoutSubtitle: String
+    val treadmillFollowMode: String
+    val treadmillFollowModeOff: String
+    val treadmillFollowModeGentle: String
+    val treadmillFollowModeSmart: String
+    val treadmillFollowModeOffSubtitle: String
+    val treadmillFollowModeGentleSubtitle: String
+    val treadmillFollowModeSmartSubtitle: String
+    val treadmillFollowTransitionSeconds: String
+    val treadmillFollowTransitionByLevel: String
+    fun treadmillFollowSecondsLabel(seconds: Int): String
+    val treadmillFollowShortStep: String
+    val treadmillFollowShortStepNone: String
+    fun treadmillFollowShortStepLabel(time: String): String
+    val treadmillFollowMaxSpeed: String
+    val treadmillFollowTone: String
+    val treadmillFollowToneSubtitle: String
+    val treadmillSpeedStep: String
+    val treadmillSpeedStepSubtitle: String
     val dashboardChartTimespan: String
     val chartTimespanFullSession: String
+    val history: String
+    val historySubtitle: String
+    val historyCharts: String
+    val historyChartsSubtitle: String
+    val historyEquipmentType: String
+    fun moveUp(name: String): String
+    fun moveDown(name: String): String
     val keepOneDashboardOptionSelected: String
     val notificationShortcut: String
     val notificationShortcutSubtitle: String
@@ -273,6 +359,12 @@ interface SettingsStrings {
     val maxLogEntries: String
     val debug: String
     val debugSubtitle: String
+    val logs: String
+    val logsSubtitle: String
+    val groupBridge: String
+    val groupDisplay: String
+    val groupDiagnostics: String
+    val groupAbout: String
     val debugLogging: String
     val debugLoggingEnabledSubtitle: String
     val debugLoggingDisabledSubtitle: String
@@ -300,11 +392,45 @@ interface SettingsStrings {
     fun chartTimespanMinutes(minutes: Int): String
 }
 
+/** The screen that shows the workout on the watch while it runs, and the card that leads to it. */
+interface WorkoutScreenStrings {
+    val cardTitle: String
+    val cardTitleFree: String
+    val freeRun: String
+    val noWorkout: String
+    val stepsAppearHere: String
+    val open: String
+    val close: String
+    val warmUp: String
+    val run: String
+    val recovery: String
+    val coolDown: String
+    fun step(number: Int): String
+    fun stepRemaining(time: String): String
+    val paused: String
+    val target: String
+    val byHand: String
+    val noPace: String
+    val noPaceBeltStays: String
+    val endsWithLapKey: String
+    val endsByWatch: String
+    val next: String
+    val nextAhead: String
+    val noNext: String
+    val anotherStep: String
+    fun fieldNumber(number: Int): String
+    val fieldShows: String
+    val chooseValue: String
+    val closePicker: String
+    val paceUnit: String
+}
+
 interface NotificationStrings {
     val channel: String
     val title: String
     val text: String
     val pausedText: String
+    val watchLedText: String
     val waitingTitle: String
     val waitingText: String
     val stopWaitingAction: String

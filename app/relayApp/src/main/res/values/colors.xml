@@ -1,0 +1,5 @@
+<resources>
+    <!-- Not the bridge's green, so the two apps are told apart on a phone that has both. -->
+    <color name="launcher_background">#4338CA</color>
+    <color name="window_background">#F8FAFC</color>
+</resources>

@@ -1,0 +1,38 @@
+<resources>
+    <string name="app_name">FTMS Relay</string>
+    <string name="intro">Reicht den Laufsensor der FTMS Bridge an die Uhr weiter. Dieses Handy bleibt in der Nähe des Laufbands; an der Uhr wird dieses Handy als Laufsensor hinzugefügt, nicht das Handy mit der Bridge.</string>
+
+    <string name="label_source">Bridge-Handy</string>
+    <string name="source_off">Aus</string>
+    <string name="source_permission_missing">Berechtigung fehlt</string>
+    <string name="source_bluetooth_off">Bluetooth ist aus</string>
+    <string name="source_searching">Sucht</string>
+    <string name="source_connecting">Verbindet</string>
+    <string name="source_connected">Verbunden</string>
+
+    <string name="label_sensor">Sensor für die Uhr</string>
+    <string name="sensor_off">Aus</string>
+    <string name="sensor_unsupported">Dieses Handy kann kein Sensor sein</string>
+    <string name="sensor_permission_missing">Berechtigung fehlt</string>
+    <string name="sensor_advertising">Wartet auf die Uhr</string>
+    <string name="sensor_connected">Uhr verbunden</string>
+    <string name="sensor_failed">Einrichtung fehlgeschlagen</string>
+
+    <string name="label_measurements">Messwerte</string>
+    <string name="measurements_none">Noch keine</string>
+    <string name="measurements_counts">Empfangen: %1$d, an die Uhr weitergereicht: %2$d</string>
+    <string name="measurements_last">%1$s: %2$s km/h, Schrittfrequenz %3$d/min, %4$d m</string>
+    <string name="measurements_last_without_distance">%1$s: %2$s km/h, Schrittfrequenz %3$d/min</string>
+
+    <string name="action_start">Relay starten</string>
+    <string name="action_stop">Relay stoppen</string>
+    <string name="permission_denied">Ohne die Bluetooth-Berechtigung kann das Relay nicht arbeiten. Erlaube dieser App in den Systemeinstellungen „Geräte in der Nähe“.</string>
+    <string name="battery_text">Android kann das Relay im Standby beenden, um Akku zu sparen.</string>
+    <string name="battery_action">Hintergrundbetrieb erlauben</string>
+    <string name="label_events">Ereignisse</string>
+
+    <string name="notification_channel">Relay</string>
+    <string name="notification_title">FTMS Relay läuft</string>
+    <string name="notification_text">Bridge-Handy: %1$s · Uhr: %2$s</string>
+    <string name="notification_stop">Stoppen</string>
+</resources>

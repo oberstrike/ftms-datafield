@@ -284,6 +284,45 @@ class SqlDelightSessionHistoryRepositoryTest {
         assertEquals(SensorReadings(powerW = 201), repository.observeSamples("ride").first().last().watch)
     }
 
+    @Test
+    fun deletesSeveralSessionsWithTheirSamplesAndLeavesTheOthers() = runTest {
+        val repository = repository()
+        val first = repository.createSession(1_000L, "Treadmill", "AA:BB", null, null)
+        val second = repository.createSession(50_000L, "Treadmill", "AA:BB", null, null)
+        val kept = repository.createSession(90_000L, "Treadmill", "AA:BB", null, null)
+        listOf(first, second, kept).forEach { repository.appendSample(it.sessionId, it.startedAtMillis, sample(it.startedAtMillis + 1_000L)) }
+
+        repository.deleteSessions(listOf(first.sessionId, second.sessionId, "no such session"))
+
+        assertEquals(listOf(kept.sessionId), repository.observeRecentSessions().first().map { it.sessionId })
+        assertEquals(0, repository.observeSamples(first.sessionId).first().size)
+        assertEquals(0, repository.observeSamples(second.sessionId).first().size)
+        assertEquals(1, repository.observeSamples(kept.sessionId).first().size)
+    }
+
+    @Test
+    fun averagesTheSamplesOfEachSessionAskedFor() = runTest {
+        val repository = repository()
+        val ride = repository.createSession(1_000L, "Bike", "AA:BB", null, null, FtmsMachineKind.INDOOR_BIKE)
+        val empty = repository.createSession(50_000L, "Bike", "AA:BB", null, null, FtmsMachineKind.INDOOR_BIKE)
+        val other = repository.createSession(90_000L, "Bike", "AA:BB", null, null, FtmsMachineKind.INDOOR_BIKE)
+        fun measured(timestamp: Long, powerW: Int?, heartRateBpm: Int?, cadenceRpm: Double?) =
+            sample(timestamp).let { it.copy(raw = it.raw.copy(powerW = powerW, heartRateBpm = heartRateBpm, cadenceRpm = cadenceRpm)) }
+
+        repository.appendSample(ride.sessionId, ride.startedAtMillis, measured(2_000L, 100, 130, 80.0))
+        repository.appendSample(ride.sessionId, ride.startedAtMillis, measured(3_000L, 200, null, 90.0))
+        // Without a value: must not pull an average towards zero.
+        repository.appendSample(ride.sessionId, ride.startedAtMillis, measured(31_000L, null, null, null))
+        repository.appendSample(other.sessionId, other.startedAtMillis, measured(91_000L, 999, 199, 199.0))
+
+        val averages = repository.sessionAverages(listOf(ride.sessionId, empty.sessionId))
+
+        assertEquals(setOf(ride.sessionId, empty.sessionId), averages.keys)
+        assertEquals(SessionAverages(recordedMillis = 30_000L, powerW = 150.0, heartRateBpm = 130.0, cadence = 85.0), averages[ride.sessionId])
+        assertEquals(SessionAverages(), averages[empty.sessionId])
+        assertEquals(emptyMap(), repository.sessionAverages(emptyList()))
+    }
+
     private fun repository(): SqlDelightSessionHistoryRepository {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         FtmsBridgeDatabase.Schema.create(driver)

@@ -9,6 +9,7 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.router.stack.pushToFront
 import com.arkivanov.decompose.value.Value
+import com.arkivanov.essenty.backhandler.BackCallback
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -21,6 +22,7 @@ import de.ma.ftms.bridge.runtime.BridgeSettings
 import de.ma.ftms.bridge.runtime.BridgeUiState
 import de.ma.ftms.bridge.runtime.EquipmentType
 import de.ma.ftms.bridge.runtime.SourcedMetric
+import de.ma.ftms.bridge.runtime.TreadmillSetting
 import de.ma.ftms.bridge.runtime.ValueSource
 import kotlinx.coroutines.flow.StateFlow
 
@@ -33,7 +35,6 @@ interface RootComponent {
         data class DashboardChild(val component: DashboardComponent) : Child()
         data class HistoryChild(val component: HistoryComponent) : Child()
         data class DevicesChild(val component: DevicesComponent) : Child()
-        data class LogsChild(val component: LogsComponent) : Child()
         data class SettingsChild(val component: SettingsComponent) : Child()
     }
 }
@@ -47,6 +48,8 @@ interface DashboardComponent {
     fun onAdjustTargetPower(deltaWatts: Int)
     fun onClearTargetPower()
     fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource)
+    fun onSetTreadmillValue(setting: TreadmillSetting, value: Int)
+    fun onStepTreadmillValue(setting: TreadmillSetting, delta: Int)
 }
 
 interface DevicesComponent {
@@ -63,6 +66,8 @@ interface HistoryComponent {
     fun onSelectSession(sessionId: String?)
     fun onDeleteSession(sessionId: String)
     fun onClearHistory()
+    fun onToggleSessionMark(sessionId: String)
+    fun onClearSessionMarks()
 }
 
 interface LogsComponent {
@@ -85,11 +90,14 @@ interface SettingsComponent {
         data object Bridge : Child()
         data object Power : Child()
         data object Dashboard : Child()
+        data object History : Child()
         data object IndoorCycling : Child()
+        data object Treadmill : Child()
         data object Sources : Child()
         data object Timing : Child()
         data object Language : Child()
         data object Debug : Child()
+        data class Logs(val component: LogsComponent) : Child()
         data object RememberedDevices : Child()
         data object OpenSource : Child()
     }
@@ -102,14 +110,28 @@ class DefaultRootComponent(
 
     private val navigation = StackNavigation<NavigationConfig>()
 
+    // Back leads from every other tab to the dashboard and leaves the app from there, however
+    // many tabs were visited before. Whatever a tab itself has to go back from comes first.
+    private val backToDashboard = BackCallback(isEnabled = false, priority = BackCallback.PRIORITY_MIN) {
+        navigateTo(BridgeTab.DASHBOARD)
+    }
+
     override val childStack: Value<ChildStack<*, RootComponent.Child>> = childStack(
         source = navigation,
         serializer = null,
         initialConfiguration = NavigationConfig.Dashboard,
-        handleBackButton = true,
+        handleBackButton = false,
         childFactory = ::createChild,
     )
 
+    init {
+        backHandler.register(backToDashboard)
+        childStack.subscribe { stack ->
+            backToDashboard.isEnabled = tabForConfig(stack.active.configuration) != BridgeTab.DASHBOARD
+        }
+    }
+
+    // The tabs visited stay in the stack, so each is found again as it was left.
     override fun navigateTo(tab: BridgeTab) {
         navigation.bringToFront(tab.config)
     }
@@ -119,7 +141,6 @@ class DefaultRootComponent(
             NavigationConfig.Dashboard -> RootComponent.Child.DashboardChild(DefaultDashboardComponent(componentContext))
             NavigationConfig.History -> RootComponent.Child.HistoryChild(DefaultHistoryComponent(componentContext))
             NavigationConfig.Devices -> RootComponent.Child.DevicesChild(DefaultDevicesComponent(componentContext))
-            NavigationConfig.Logs -> RootComponent.Child.LogsChild(DefaultLogsComponent(componentContext))
             NavigationConfig.Settings -> RootComponent.Child.SettingsChild(DefaultSettingsComponent(componentContext))
         }
 }
@@ -129,14 +150,18 @@ private class DefaultDashboardComponent(
 ) : DashboardComponent,
     ComponentContext by componentContext {
     override val state: StateFlow<BridgeUiState> = BridgeRuntime.state
-    override fun onStartBridge(context: Context) = BridgeRuntime.startBridge(context)
-    override fun onPauseBridge() = BridgeRuntime.pauseBridge()
-    override fun onStopBridge() = BridgeRuntime.stopBridge()
+    override fun onStartBridge(context: Context) = BridgeRuntime.startBridgeByHand(context)
+    override fun onPauseBridge() = BridgeRuntime.pauseBridgeByHand()
+    override fun onStopBridge() = BridgeRuntime.stopBridgeByHand()
     override fun onSetTargetPower(watts: Int) = BridgeRuntime.setTargetPower(watts)
     override fun onAdjustTargetPower(deltaWatts: Int) = BridgeRuntime.adjustTargetPower(deltaWatts)
     override fun onClearTargetPower() = BridgeRuntime.clearTargetPower()
     override fun onSelectSensorSource(metric: SourcedMetric, source: ValueSource) =
         BridgeRuntime.selectSensorSource(metric, source)
+    override fun onSetTreadmillValue(setting: TreadmillSetting, value: Int) =
+        BridgeRuntime.setTreadmillValue(setting, value)
+    override fun onStepTreadmillValue(setting: TreadmillSetting, delta: Int) =
+        BridgeRuntime.stepTreadmillValue(setting, delta)
 }
 
 private class DefaultDevicesComponent(
@@ -161,6 +186,8 @@ private class DefaultHistoryComponent(
     override fun onSelectSession(sessionId: String?) = BridgeRuntime.selectHistorySession(sessionId)
     override fun onDeleteSession(sessionId: String) = BridgeRuntime.deleteHistorySession(sessionId)
     override fun onClearHistory() = BridgeRuntime.clearHistory()
+    override fun onToggleSessionMark(sessionId: String) = BridgeRuntime.toggleHistorySessionMark(sessionId)
+    override fun onClearSessionMarks() = BridgeRuntime.clearHistorySessionMarks()
 }
 
 private class DefaultLogsComponent(
@@ -199,11 +226,14 @@ private class DefaultSettingsComponent(
             SettingsConfig.Bridge -> SettingsComponent.Child.Bridge
             SettingsConfig.Power -> SettingsComponent.Child.Power
             SettingsConfig.Dashboard -> SettingsComponent.Child.Dashboard
+            SettingsConfig.History -> SettingsComponent.Child.History
             SettingsConfig.IndoorCycling -> SettingsComponent.Child.IndoorCycling
+            SettingsConfig.Treadmill -> SettingsComponent.Child.Treadmill
             SettingsConfig.Sources -> SettingsComponent.Child.Sources
             SettingsConfig.Timing -> SettingsComponent.Child.Timing
             SettingsConfig.Language -> SettingsComponent.Child.Language
             SettingsConfig.Debug -> SettingsComponent.Child.Debug
+            SettingsConfig.Logs -> SettingsComponent.Child.Logs(DefaultLogsComponent(componentContext))
             SettingsConfig.RememberedDevices -> SettingsComponent.Child.RememberedDevices
             SettingsConfig.OpenSource -> SettingsComponent.Child.OpenSource
         }
@@ -214,11 +244,14 @@ sealed class SettingsConfig {
     data object Bridge : SettingsConfig()
     data object Power : SettingsConfig()
     data object IndoorCycling : SettingsConfig()
+    data object Treadmill : SettingsConfig()
     data object Sources : SettingsConfig()
     data object Dashboard : SettingsConfig()
+    data object History : SettingsConfig()
     data object Timing : SettingsConfig()
     data object Language : SettingsConfig()
     data object Debug : SettingsConfig()
+    data object Logs : SettingsConfig()
     data object RememberedDevices : SettingsConfig()
     data object OpenSource : SettingsConfig()
 }
@@ -227,7 +260,6 @@ sealed class NavigationConfig {
     data object Dashboard : NavigationConfig()
     data object History : NavigationConfig()
     data object Devices : NavigationConfig()
-    data object Logs : NavigationConfig()
     data object Settings : NavigationConfig()
 }
 
@@ -238,7 +270,6 @@ enum class BridgeTab(
     DASHBOARD(BridgeIcons.Dashboard, NavigationConfig.Dashboard),
     HISTORY(BridgeIcons.History, NavigationConfig.History),
     DEVICES(BridgeIcons.Devices, NavigationConfig.Devices),
-    LOGS(BridgeIcons.Logs, NavigationConfig.Logs),
     SETTINGS(BridgeIcons.Settings, NavigationConfig.Settings);
 
     fun title(strings: Strings): String =
@@ -246,7 +277,6 @@ enum class BridgeTab(
             DASHBOARD -> strings.nav.dashboard
             HISTORY -> strings.nav.history
             DEVICES -> strings.nav.devices
-            LOGS -> strings.nav.logs
             SETTINGS -> strings.nav.settings
         }
 }
@@ -255,7 +285,6 @@ fun tabForConfig(config: Any?): BridgeTab =
     when (config) {
         NavigationConfig.History -> BridgeTab.HISTORY
         NavigationConfig.Devices -> BridgeTab.DEVICES
-        NavigationConfig.Logs -> BridgeTab.LOGS
         NavigationConfig.Settings -> BridgeTab.SETTINGS
         else -> BridgeTab.DASHBOARD
     }
@@ -335,28 +364,6 @@ private object BridgeIcons {
             moveTo(13f, 14.8f)
             lineTo(13f, 17.2f)
             lineTo(14.2f, 16f)
-            close()
-        }
-    }.build()
-
-    val Logs: ImageVector = Builder("BridgeLogs", 24.dp, 24.dp, 24f, 24f).apply {
-        path(fill = SolidColor(Color.Black)) {
-            moveTo(4f, 4f)
-            lineTo(20f, 4f)
-            lineTo(20f, 20f)
-            lineTo(4f, 20f)
-            close()
-            moveTo(6f, 7f)
-            lineTo(10f, 10f)
-            lineTo(6f, 13f)
-            lineTo(6f, 10.5f)
-            lineTo(8f, 10f)
-            lineTo(6f, 9.5f)
-            close()
-            moveTo(11f, 14f)
-            lineTo(18f, 14f)
-            lineTo(18f, 16f)
-            lineTo(11f, 16f)
             close()
         }
     }.build()

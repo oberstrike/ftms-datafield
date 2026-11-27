@@ -118,9 +118,17 @@ internal fun isEquipmentMoving(sample: FtmsSample): Boolean? {
 
 /** Address of the equipment auto-start should watch, or null while it has nothing to do. */
 internal fun autoStartWatchAddress(state: BridgeUiState, appVisible: Boolean): String? =
+    standbyWatchAddress(state, appVisible)?.takeIf { state.settings.autoStart }
+
+/**
+ * Address of the equipment to look for and hold a connection to while no session runs, or null
+ * while there is no reason for one. The reasons are auto-start, which waits there for movement,
+ * and a treadmill that is to be steered from the app, session or not.
+ */
+internal fun standbyWatchAddress(state: BridgeUiState, appVisible: Boolean): String? =
     state.selectedTreadmillAddress?.takeIf {
         appVisible &&
-            state.settings.autoStart &&
+            (state.settings.autoStart || isTreadmillControlWanted(state.settings, state.selectedEquipmentType)) &&
             !state.running &&
             // Connecting ends a discovery scan, so the user's own scan goes first.
             !state.scanning &&

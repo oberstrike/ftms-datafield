@@ -17,7 +17,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -61,6 +63,7 @@ import de.ma.ftms.bridge.runtime.SensorSources
 import de.ma.ftms.bridge.runtime.SourcedMetric
 import de.ma.ftms.bridge.runtime.TargetPowerPoint
 import de.ma.ftms.bridge.runtime.ValueSource
+import de.ma.ftms.bridge.runtime.WorkoutFollowState
 import de.ma.ftms.bridge.runtime.isFootPodMode
 import de.ma.ftms.bridge.runtime.parseTargetPowerInput
 import de.ma.ftms.bridge.runtime.suggestedTargetPower
@@ -110,11 +113,44 @@ fun DashboardView(component: DashboardComponent) {
         )
     }
 
+    // Speed and incline of a treadmill go with its belt, not with a session: the card is there as
+    // soon as the treadmill is connected and takes such values.
+    val showTreadmillControl = type == EquipmentType.TREADMILL &&
+        state.settings.treadmillControl &&
+        state.treadmillControl.available
+    val treadmillControlCard: @Composable () -> Unit = {
+        TreadmillControlCard(
+            control = state.treadmillControl,
+            speedPresets = state.settings.treadmillSpeedPresets,
+            inclinePresets = state.settings.treadmillInclinePresets,
+            follow = state.workoutFollow,
+            speedStep = state.settings.treadmillSpeedStep,
+            confirmLargeIncrease = state.settings.treadmillConfirmLargeIncrease,
+            strings = strings,
+            onSet = component::onSetTreadmillValue,
+            onStep = component::onStepTreadmillValue,
+        )
+    }
+
+    val offersWorkoutScreen = isWorkoutScreenOffered(
+        available = state.running && type == EquipmentType.TREADMILL,
+        workoutActive = state.workoutFollow.active,
+        startedByWatch = state.startedByWatch,
+    )
+
     // A list keeps the item it shows in place when another is added above it. The page is to
     // open on the first chart, so it goes back to the top whenever a new item takes the lead.
     val listState = rememberLazyListState()
     val leadingItem = charts.firstOrNull()
-    LaunchedEffect(state.running, delivered != null, leadingItem) {
+    // The cards that steer the equipment count too: they arrive with the connection and may come first.
+    LaunchedEffect(
+        state.running,
+        delivered != null,
+        leadingItem,
+        showTargetPower,
+        showTreadmillControl,
+        offersWorkoutScreen,
+    ) {
         listState.scrollToItem(0)
     }
 
@@ -124,6 +160,10 @@ fun DashboardView(component: DashboardComponent) {
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // A workout on the watch has a screen of its own; this leads there with the phone upright.
+            if (offersWorkoutScreen) {
+                item(key = "workout-screen") { WorkoutScreenCard(follow = state.workoutFollow, strings = strings) }
+            }
             if (state.running && delivered == null) {
                 item(key = "waiting") {
                     InfoCard {
@@ -135,6 +175,10 @@ fun DashboardView(component: DashboardComponent) {
             if (showTargetPower && DashboardMetricKey.POWER !in charts) {
                 item(key = "target-power") { targetPowerCard() }
             }
+            // Likewise the treadmill's keys and the speed chart.
+            if (showTreadmillControl && DashboardMetricKey.SPEED !in charts) {
+                item(key = "treadmill-control") { treadmillControlCard() }
+            }
             charts.forEach { key ->
                 item(key = "chart-${key.name}") {
                     val showsTarget = key == DashboardMetricKey.POWER && type == EquipmentType.INDOOR_BIKE
@@ -145,10 +189,14 @@ fun DashboardView(component: DashboardComponent) {
                         samples = state.liveDashboardSamples,
                         timespan = state.settings.dashboardChartTimespan,
                         targetTrace = if (showsTarget) state.targetPowerTrace else emptyList(),
+                        sources = state.settings.sensorSources(type),
                     )
                 }
                 if (showTargetPower && key == DashboardMetricKey.POWER) {
                     item(key = "target-power") { targetPowerCard() }
+                }
+                if (showTreadmillControl && key == DashboardMetricKey.SPEED) {
+                    item(key = "treadmill-control") { treadmillControlCard() }
                 }
             }
             if (delivered != null) {
@@ -181,6 +229,47 @@ fun DashboardView(component: DashboardComponent) {
                 item(key = "last-session") { LastSession(state.lastSummary, showAscent = type.showsClimb, strings = strings) }
             }
             item(key = "end") { VerticalGap() }
+        }
+    }
+}
+
+/**
+ * Leads to the workout screen: it says that the watch is in a workout, with the step in a line,
+ * or, in a session the watch started without one, names the screen. A tap anywhere on it opens
+ * the screen; a button next to the text would leave the text too little room on a phone.
+ */
+@Composable
+private fun WorkoutScreenCard(follow: WorkoutFollowState, strings: Strings) {
+    val open = LocalWorkoutScreenOpener.current
+    InfoCard(
+        modifier = Modifier
+            .clip(CardDefaults.elevatedShape)
+            .clickable(onClickLabel = strings.workout.open, role = Role.Button, onClick = open),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (follow.active) strings.workout.cardTitle else strings.workout.cardTitleFree,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    if (follow.active) {
+                        listOfNotNull(
+                            workoutStepTitle(follow, strings),
+                            follow.secondsLeft?.let { strings.workout.stepRemaining(formatClock(it)) },
+                        ).joinToString(" · ")
+                    } else {
+                        "${strings.workout.freeRun} · ${strings.workout.noWorkout}"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                imageVector = BridgeUiIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -552,6 +641,8 @@ private fun Metrics(
  * @param timespan how much of the session's end is drawn.
  * @param targetTrace the changes of the target power, to draw it as a line next to the measured
  * power; empty for every other chart.
+ * @param sources which source is chosen for heart rate, power and cadence. Their charts show the
+ * chosen source and, next to it, what the other source delivers.
  */
 @Composable
 private fun MetricChart(
@@ -561,24 +652,37 @@ private fun MetricChart(
     samples: List<SmoothedTreadmillSample>,
     timespan: DashboardChartTimespan,
     targetTrace: List<TargetPowerPoint>,
+    sources: SensorSources,
 ) {
     val title = key.label(strings, type)
     val targetLabel = strings.dashboard.targetPowerTarget
-    val lines = remember(samples, key, timespan, targetTrace, title, targetLabel) {
+    val sourcedMetric = key.sourcedMetric()
+    val chosenSource = sourcedMetric?.let(sources::of)
+    val chosenLabel = chosenSource?.let { valueSourceLabel(it, strings) }.orEmpty()
+    val otherLabel = chosenSource?.let { valueSourceLabel(it.other(), strings) }.orEmpty()
+    val lines = remember(samples, key, timespan, targetTrace, title, targetLabel, chosenSource, chosenLabel, otherLabel) {
         val points = samples
             .points(key, monotonic = key == DashboardMetricKey.ASCENT)
             .lastMillis(timespan.durationMillis)
         val origin = samples.firstOrNull()?.raw?.timestampMillis
-        when {
+        val measured = when {
             points.size < 2 -> emptyList()
-            origin == null || targetTrace.isEmpty() -> listOf(ChartLine(title, points))
-            else -> listOf(
-                ChartLine(title, points),
-                ChartLine(
-                    label = targetLabel,
-                    points = targetPowerLine(targetTrace, origin, fromSeconds = points.first().x, toSeconds = points.last().x),
-                    role = ChartLineRole.TARGET,
-                ),
+            sourcedMetric == null || chosenSource == null -> listOf(ChartLine(title, points))
+            else -> sourceChartLines(
+                title = title,
+                chosen = points,
+                other = samples.sourcePoints(sourcedMetric, chosenSource.other()).filter { it.x >= points.first().x },
+                chosenLabel = chosenLabel,
+                otherLabel = otherLabel,
+            )
+        }
+        if (measured.isEmpty() || origin == null || targetTrace.isEmpty()) {
+            measured
+        } else {
+            measured + ChartLine(
+                label = targetLabel,
+                points = targetPowerLine(targetTrace, origin, fromSeconds = points.first().x, toSeconds = points.last().x),
+                role = ChartLineRole.TARGET,
             )
         }
     }
@@ -599,6 +703,29 @@ private fun MetricChart(
             showStats = key.chartShowsStats(),
             chartHeight = 150.dp,
         )
+    }
+}
+
+/** What [source] delivered of [metric] over the session, whether or not it is the chosen source. */
+private fun List<SmoothedTreadmillSample>.sourcePoints(metric: SourcedMetric, source: ValueSource): List<ChartPoint> {
+    val firstTimestamp = firstOrNull()?.raw?.timestampMillis
+    var lastX: Double? = null
+    return mapIndexedNotNull { index, sample ->
+        val timestamp = sample.raw.timestampMillis
+        val x = if (timestamp != null && firstTimestamp != null) {
+            (timestamp - firstTimestamp).coerceAtLeast(0L).toDouble() / 1000.0
+        } else {
+            index.toDouble()
+        }
+        val previousX = lastX
+        if (previousX != null && x <= previousX) {
+            return@mapIndexedNotNull null
+        }
+
+        val readings = if (source == ValueSource.EQUIPMENT) sample.raw.equipment else sample.raw.watch
+        val y = sourceValue(metric, readings) ?: return@mapIndexedNotNull null
+        lastX = x
+        ChartPoint(x, y)
     }
 }
 

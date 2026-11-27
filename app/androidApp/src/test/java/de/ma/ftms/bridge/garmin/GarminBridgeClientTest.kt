@@ -174,4 +174,30 @@ class GarminBridgeClientTest {
         assertNull(parseWatchSensorMessage(listOf(mapOf("type" to "garmin_hr"))))
         assertNull(parseWatchSensorMessage(listOf("not-a-map")))
     }
+
+    @Test
+    fun describesTheWorkoutMessageOfTheDataFieldAsOneSortedLine() {
+        val message = listOf(
+            mapOf(
+                "type" to "garmin_workout",
+                "started" to 1,
+                "laps" to 2,
+                "done" to 2,
+                "cur" to mapOf("name" to "Fast", "int" to 0, "step" to mapOf("tt" to 4, "dv" to 120, "dt" to 0, "lo" to 1200, "hi" to 1220)),
+            ),
+        )
+
+        assertEquals(
+            "cur={int=0 name=\"Fast\" step={dt=0 dv=120 hi=1220 lo=1200 tt=4}} done=2 laps=2 started=1",
+            describeWatchWorkoutMessage(message),
+        )
+    }
+
+    @Test
+    fun aSensorMessageIsNoWorkoutMessageAndTheOtherWayRound() {
+        assertNull(describeWatchWorkoutMessage(listOf(mapOf("type" to "garmin_hr", "hr" to 142))))
+        assertNull(parseWatchSensorMessage(listOf(mapOf("type" to "garmin_workout", "hr" to 142))))
+        assertNull(parseWatchTimerState(listOf(mapOf("type" to "garmin_workout", "timer" to 3))))
+        assertEquals("err=\"unsupported\"", describeWatchWorkoutMessage(listOf(mapOf("type" to "garmin_workout", "err" to "unsupported"))))
+    }
 }
